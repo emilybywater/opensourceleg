@@ -327,9 +327,6 @@ class ADS114S0x(ADCBase):
             pga_gain (int): Default is 1,
             voltage_reference (float): Reference voltage in volts. Default is 2.5 V.
             offline (bool): If True, the ADC operates in offline mode. Default is False.
-
-        Raises:
-            ValueError: If the configuration parameters are invalid.
         """
 
         try:
@@ -510,10 +507,6 @@ class ADS114S0x(ADCBase):
         """Check if CRC bit is set in SYS register"""
         return bool(self.get_register_value(self._REG_ADDR_SYS) & self._ADS_CRC_MASK)
 
-    @staticmethod
-    def adc_starup_routine() -> None:
-        raise ValueError("The function you are looking for has been replaced by start()")
-
     def read_single_register(self, address: int) -> int:
         """
         Reads contents of a single register at the specified address
@@ -639,12 +632,6 @@ class ADS114S0x(ADCBase):
         # Otherwise use SPI command:
         self.send_start()
 
-    def stop_conversions(self) -> None:
-        raise ValueError("The function you are looking for has been replaced by stop()")
-
-    def reset_adc(self) -> None:
-        raise ValueError("The function you are looking for has been replaced by reset()")
-
     def read_converted_data(self, mode: ReadMode = ReadMode.DIRECT) -> tuple[int, Optional[int]]:
         """
         Sends the read command and retrieves STATUS (if enabled) and data
@@ -736,7 +723,6 @@ class ADS114S0x(ADCBase):
         Updates the register_map array to its default values
         Should be called after powering up or resetting the device
         """
-
         self._register_map[self._REG_ADDR_ID] = self._ID_DEFAULT
         self._register_map[self._REG_ADDR_STATUS] = self._STATUS_DEFAULT
         self._register_map[self._REG_ADDR_INPMUX] = self._INPMUX_DEFAULT
@@ -757,10 +743,6 @@ class ADS114S0x(ADCBase):
         self._register_map[self._REG_ADDR_GPIOCON] = self._GPIOCON_DEFAULT
 
     # Functions transferred from VSO-CODEBASE-DEV repo: hal.py
-    def init_gpio() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
     def init_spi(self) -> None:
         """
         Configures the Raspberry Pi's SPI peripheral for interfacing with the ADC
@@ -773,11 +755,6 @@ class ADS114S0x(ADCBase):
         self._spi.max_speed_hz = self._SPI_SPEED
         self._spi.mode = 0b01  # SPI Mode 1 (CPOL=0, CPHA=1)
         self._spi.bits_per_word = 8
-
-    @staticmethod
-    def init_adc_peripherals() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for has been replaced by init_gpio and init_spi")
 
     def cleanup(self) -> None:
         """
@@ -805,23 +782,6 @@ class ADS114S0x(ADCBase):
         """
         sleep(delay_time_us / 1000000.0)
 
-    @staticmethod
-    def get_drdy_interrupt_status() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    def set_drdy_interrupt_status(value: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    def enable_drdy_interrupt(int_enable: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    def _gpio_drdy_irq_handler(channel: int) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
     def wait_for_drdy_htol(self, timeout_ms: int) -> bool:
         """
         Waits for nDRDY GPIO to go from High to Low or until timeout
@@ -844,36 +804,6 @@ class ADS114S0x(ADCBase):
             self._flag_nDRDY_INTERRUPT = False  # Reset flag
             return True
 
-    @staticmethod
-    def get_reset() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def set_reset(state: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def toggle_reset() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def get_start() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def set_start(state: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def toggle_start(direction: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
     def send_start(self) -> None:
         """
         Sends START command through SPI
@@ -886,9 +816,6 @@ class ADS114S0x(ADCBase):
         """
         self.send_command(self._OPCODE_STOP)
 
-    def send_reset(self) -> None:
-        raise ValueError("The function you are looking for has been replaced by reset()")
-
     def send_wakeup(self) -> None:
         """
         Sends WAKEUP command through SPI
@@ -900,15 +827,6 @@ class ADS114S0x(ADCBase):
         Sends POWERDOWN command through SPI
         """
         self.send_command(self._OPCODE_POWERDOWN)
-
-    @staticmethod
-    def get_cs() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    def set_cs(state: bool) -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
 
     def spi_send_receive_arrays(self, data_tx: list[int], byte_length: int) -> list[int]:
         """
@@ -1038,25 +956,6 @@ class ADS114S0x(ADCBase):
         return crc & 0xFF
 
     # Functions transferred from VSO_CODEBASE_DEV repo adc_common.py
-    @staticmethod
-    def init_pi_interfaces() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for has been replaced by init_gpio and init_spi")
-
-    @staticmethod
-    def hard_reset_via_pin() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
-    @staticmethod
-    def adc_startup() -> None:
-        raise ValueError("The function you are looking for has been replaced by start()")
-
-    @staticmethod
-    def configure_single_shot() -> None:
-        # TODO: Implement if needed.
-        raise ValueError("The function you are looking for is not yet implemented.")
-
     def set_mux_single_ended(self, pos_code: int, neg_code: Optional[int] = None) -> None:
         """
         INPMUX: upper nibble = positive input, lower nibble = negative input.
@@ -1067,9 +966,6 @@ class ADS114S0x(ADCBase):
 
         inpmux = (pos_code & 0xF0) | (neg_code & 0x0F)
         self.write_single_register(self._REG_ADDR_INPMUX, inpmux)
-
-    def start_single_conversion(self) -> None:
-        raise ValueError("The function you are looking for has been replaced by send_start()")
 
     def wait_and_read_code16(self, *, timeout_ms: int = 200) -> tuple[int, Optional[int]]:
         """
@@ -1099,9 +995,6 @@ class ADS114S0x(ADCBase):
         Vin = code * (Vref/gain) / 32768
         """
         return (code16 * (vref_volts / float(gain))) / 32768.0
-
-    def safe_cleanup(self) -> None:
-        raise ValueError("The function you are looking for has been replaced by cleanup()")
 
     # Functions transferred from VSO_CODEBASE_DEV repo multi_channel_read.py
     def adc_configure_common(
