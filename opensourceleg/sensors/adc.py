@@ -325,6 +325,7 @@ class ADS114S0x(ADCBase):
             tag (str): Identifier for the ADC instance. Default is "ADS114S0x".
             spi_bus (int): SPI bus number. Default is 0.
             spi_cs (int): SPI chip select line. Default is 0.
+            data_rate (int): Sampling rate in Hz. Default is 500 Hz.
             pga_gain (int): Default is 1,
             voltage_reference (float): Reference voltage in volts. Default is 2.5 V.
             offline (bool): If True, the ADC operates in offline mode. Default is False.
