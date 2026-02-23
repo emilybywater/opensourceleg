@@ -3,9 +3,10 @@ Module for communicating with the ADS131M0x and ADS114S0x family of ADC chips.
 """
 
 import math
+from dataclasses import dataclass
 from enum import Enum
 from time import sleep
-from typing import Any, ClassVar, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 import numpy as np
 
@@ -25,7 +26,7 @@ class ADS114S0x(ADCBase):
     # Constants
     _NUM_REGISTERS = 18
     _ADS124S08_FCLK = 4096000  # Standard internal clock frequency
-    _ADS124S08_BITRES = 24  # ADC resolution
+    _ADS114S08_BITRES = 16  # ADC resolution
 
     # Data lengths
     _DATA_LENGTH = 3  # Conversion data total bytes
@@ -314,7 +315,7 @@ class ADS114S0x(ADCBase):
         spi_cs: int = 0,
         data_rate: int = 500,
         pga_gain: int = 1,
-        voltage_reference: float = 2.5,
+        voltage_reference: float = _INT_VREF,
         offline: bool = False,
     ):
         """
@@ -1063,6 +1064,22 @@ class ADS114S0x(ADCBase):
 
         if enable_crc:
             self.init_crc()
+
+
+@dataclass
+class ChannelConfig:
+    """
+    For ADS114S0x:
+
+    Defines how to read and post-process one ADC input.
+    """
+
+    name: str
+    ain_pos_code: int
+    ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
+    postprocess: Optional[Callable[[float], float]] = None
+    units: str = "V"
+    settle_reads: int = 1
 
 
 class ADS131M0x(ADCBase):
