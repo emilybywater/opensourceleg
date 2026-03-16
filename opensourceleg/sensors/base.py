@@ -513,5 +513,40 @@ class IMUBase(SensorBase, ABC):
         pass
 
 
+class HallBase(SensorBase, ABC):
+    """
+    Abstract base class for Hall effect sensors.
+
+    Hall effect sensors measure magnetic fields.
+    """
+
+    # hall-specific offline configuration
+    _OFFLINE_PROPERTIES: ClassVar[list[str]] = [
+        *SensorBase._OFFLINE_PROPERTIES,
+        "field_mT",
+    ]
+    _OFFLINE_PROPERTY_DEFAULTS: ClassVar[dict[str, Any]] = {
+        **SensorBase._OFFLINE_PROPERTY_DEFAULTS,
+        "field_mT": 0.0,
+    }
+
+    def __init__(self, tag: str, offline: bool = False, **kwargs: Any) -> None:
+        """
+        Initialize the Hall effect sensor.
+        """
+        super().__init__(tag=tag, offline=offline, **kwargs)
+
+    @property
+    @abstractmethod
+    def field_mT(self) -> float:
+        """
+        Get the estimated magnetic response
+
+        Returns:
+            float: Magnetic field in mT.
+        """
+        pass
+
+
 if __name__ == "__main__":
     pass
