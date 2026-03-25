@@ -1,6 +1,4 @@
-"""
-Module for using the DRV5056 family of Hall effect sensors.
-"""
+"""Module for using the DRV5056 family of Hall effect sensors."""
 
 from typing import ClassVar
 
@@ -28,7 +26,7 @@ class DRV5056(HallBase):
 
     # Helpful dictionaries
     _SENSOR_TO_SENS: ClassVar[dict[str, int]] = {
-        "A1": 200,  # mV/mT
+        "A1": 200,  # mV / mT
         "A2": 100,
         "A3": 50,
         "A4": 25,
@@ -105,7 +103,7 @@ class DRV5056(HallBase):
 
         self._tag = tag
         self._sensor_num = sensor_num
-        self._T_A = t_a
+        self._t_a = t_a
         self._supply_voltage = supply_voltage
 
     def __repr__(self) -> str:
@@ -114,9 +112,7 @@ class DRV5056(HallBase):
     def configure(
         self,
     ) -> None:
-        """
-        Configure Hall effect settings.
-        """
+        """Configure Hall effect settings."""
         # --- SENSITIVITY ---
         if self._sensor_num not in self._SENSOR_TO_SENS:
             raise ValueError(
@@ -130,14 +126,14 @@ class DRV5056(HallBase):
         self.lower_volt_range = self._SENS_3_3_RANGE[self._sensor_num]
 
         # --- TEMPERATURE COMPENSATION ---
-        self._S_TC = self._SENSOR_TO_COMP[self._sensor_num]
+        self._s_tc = self._SENSOR_TO_COMP[self._sensor_num]
 
         # --- VCC ---
         if self._supply_voltage != self._DRV_VCC_3_3 and self._supply_voltage != self._DRV_VCC_5:
-            if self._supply_voltage >= 4.5 and self._supply_voltage <= 5.5:
+            if 4.5 <= self._supply_voltage <= 5.5:
                 self.range = self.base_range
                 self._sensitivity = self.base_sensitivity * self._supply_voltage / self._DRV_VCC_5
-            elif self._supply_voltage >= 3 and self._supply_voltage <= 3.6:
+            elif 3 <= self._supply_voltage <= 3.6:
                 self.range = self.lower_volt_range
                 self._sensitivity = self.lower_volt_sensitivity * self._supply_voltage / self._DRV_VCC_3_3
             else:
@@ -149,15 +145,13 @@ class DRV5056(HallBase):
     def stop(self) -> None:
         self._streaming = False
 
-    def update(self, v) -> None:
-        """
-        Calculate the estimated magnetic response.
-        """
-        self._data = v
-        self.B = (v * self._V_TO_MV - self._QUIESCENT_OFFSET) / (
-            self._sensitivity * (1 + (self._S_TC * (self._T_A - 25)))
+    def update(self, voltage) -> None:
+        """Calculate the estimated magnetic response."""
+        self._data = voltage
+        self.field_strength = (voltage * self._V_TO_MV - self._QUIESCENT_OFFSET) / (
+            self._sensitivity * (1 + (self._s_tc * (self._t_a - 25)))
         )
-        if self.range == self.B:
+        if self.range == self.field_strength:
             LOGGER.error("Careful. The sensor may be out of range and your magnetic field may be higher.")
 
     @property
@@ -181,7 +175,7 @@ class DRV5056(HallBase):
         return self._data
 
     @property
-    def field_mT(self) -> float:
+    def field_mt(self) -> float:
         """
         Get the estimated magnetic response.
 

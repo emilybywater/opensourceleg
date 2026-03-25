@@ -214,6 +214,53 @@ class ADCBase(SensorBase, ABC):
         pass
 
 
+class EncoderCounterBase(SensorBase, ABC):
+    """
+    Abstract base class for encoder counter LS7366R.
+
+    Encoder counters interface with incremental encoders.
+    """
+
+    # Encoder Counter-specific offline configuration
+    _OFFLINE_PROPERTIES: ClassVar[list[str]] = [*SensorBase._OFFLINE_PROPERTIES, "position", "velocity"]
+    _OFFLINE_PROPERTY_DEFAULTS: ClassVar[dict[str, Any]] = {
+        **SensorBase._OFFLINE_PROPERTY_DEFAULTS,
+        "position": 0.0,
+        "velocity": 0.0,
+    }
+
+    def __init__(
+        self,
+        tag: str,
+        offline: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize the encoder counter.
+        """
+        super().__init__(tag=tag, offline=offline, **kwargs)
+
+    def __repr__(self) -> str:
+        """
+        Return a string representation of the encoder sensor.
+
+        Returns:
+            str: "EncoderCounterBase"
+        """
+        return "EncoderCounterBase"
+
+    @property
+    @abstractmethod
+    def count(self) -> float:
+        """
+        Get the current encoder count.
+
+        Returns:
+            float: The current encoder count.
+        """
+        pass
+
+
 class EncoderBase(SensorBase, ABC):
     """
     Abstract base class for encoder sensors.
