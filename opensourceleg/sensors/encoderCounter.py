@@ -67,7 +67,12 @@ class LS7366R:
     # ----------------------------------------------
     # Constructor
 
-    def __init__(self, CSX, CLK, BTMD):
+    def __init__(
+        self,
+        CSX: int = 0,
+        CLK: int = 1000000,
+        BTMD: int = 4,
+    ) -> None:
         self.counterSize = BTMD  # Sets the byte mode that will be used
 
         self.spi = spidev.SpiDev()  # Initialize object

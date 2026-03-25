@@ -67,6 +67,7 @@ class MaxonActuator(ActuatorBase):
 
     def __init__(
         self,
+        encoder_counter,
         enable_pin: int = 12,
         ina_pin: int = 24,
         inb_pin: int = 25,
@@ -79,13 +80,6 @@ class MaxonActuator(ActuatorBase):
     ) -> None:
         """
         Initialize Maxon motor.
-
-        Args:
-            enable_pin: PWM / speed pin
-            ina_pin: direction A
-            inb_pin: direction B
-            gear_ratio: gear ratio
-            offline: offline mode
         """
         super().__init__(
             gear_ratio=gear_ratio,
@@ -104,10 +98,11 @@ class MaxonActuator(ActuatorBase):
         self.pwm_minimum_command = pwm_minimum_command
         self.pwm_lower_limit = pwm_lower_limit
 
+        self.encoder_counter = encoder_counter
+
         if not self.offline:
             self.direction = Motor(forward=ina_pin, backward=inb_pin)
             self.speed_control = PWMOutputDevice(enable_pin)
-
             LOGGER.info("Initialized Maxon x VNH7070AY.")
         else:
             LOGGER.info("Called brushed motor initialization in offline mode.")
@@ -128,7 +123,8 @@ class MaxonActuator(ActuatorBase):
         self.speed_control.value = 0
 
     def update(self) -> None:
-        """Updates the actuator's data by reading new values."""
+        """Updates the actuator's data with encoder counter reading."""
+        self.motor_position_cts = self.encoder_counter.readCounter()
         self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
         self.motor_position_perc = self.cts_to_perc(self.motor_position_cts)
 
