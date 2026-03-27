@@ -126,7 +126,7 @@ class MaxonActuator(ActuatorBase):
     def update(self) -> None:
         """Updates the actuator's data with encoder counter reading."""
         if self.encoder_counter:
-            self.motor_position_cts = self.encoder_counter.readCounter()
+            self.motor_position_cts = self.encoder_counter.count()
         else:
             self.motor_position_cts = None
         self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
@@ -215,10 +215,17 @@ class MaxonActuator(ActuatorBase):
         # --- CALLBACK EXECUTION ---
         if callback is not None:
             callback()  # This executes the function passed in
+    
+    @property
+    def motor_encoder_position_perc(self) -> float:
+        """Motor encoder position as a percentage of the full range of motion for the motor in one direction."""
+        self.update()
+        return self.motor_position_perc
 
     @property
     def motor_position(self) -> float:
         """Motor position properties"""
+        self.update()
         return self.motor_position_cts, self.motor_position_mm, self.motor_position_perc
 
     @property

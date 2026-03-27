@@ -60,6 +60,11 @@ class VSOInitialization:
             Use after disassembly or first-time setup. 
             If False, assumes calibration file exists.
         """
+        adc = self.vso.sensors["ADC"]
+        adc.start()
+        ankle_sensor = self.vso.sensors["ankle_encoder"]
+        ankle_sensor.start()
+
         # Step 1: Optional stroke calibration
         if run_calibration:
             LOGGER.info("Running stroke calibration.")
@@ -101,8 +106,6 @@ class VSOInitialization:
 
         # Step 3: Ankle encoder offset calibration at 100% stiffness
         LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
-        ankle_sensor = self.vso.sensors["ankle_encoder"]
-        ankle_sensor.update()
         time.sleep(2)  # Warmup period for ankle encoder to stabilize
         ankle_sensor.update()
         calib_offset = self.side*np.rad2deg(ankle_sensor.position)

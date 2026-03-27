@@ -67,7 +67,7 @@ class LS7366R(EncoderCounterBase):
         tag: str = "encoder_counter",
     ) -> None:
 
-        super().__init__(offline=offline, tag=tag)
+        super().__init__(tag=tag, offline=offline)
 
         self.counterSize = BTMD  # Sets the byte mode that will be used
         self.max_val = max_val  # Maximum value for the counter, used for signed count conversion
@@ -115,9 +115,11 @@ class LS7366R(EncoderCounterBase):
             EncoderCount = (EncoderCount << 8) + data[i + 1]
 
         if data[1] != 255:
-            return EncoderCount
+            self.EncoderCount = EncoderCount
         else:
-            return EncoderCount - (self.max_val + 1)
+            self.EncoderCount = EncoderCount - (self.max_val + 1)
+        
+        return self.EncoderCount
 
     def readStatus(self):
         data = self.spi.xfer2([self.READ_STATUS, 0xFF])
@@ -138,8 +140,13 @@ class LS7366R(EncoderCounterBase):
 
     @property
     def count(self) -> None:
-        """Not yet supported by this library."""
-        raise NotImplementedError("Count not implemented.")
+        """
+        Encoder position in counts.
+
+        Returns:
+            float: Counts reading from the sensor.
+        """
+        return self.readCounter()
 
     @property
     def data(self) -> None:

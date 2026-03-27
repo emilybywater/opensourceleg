@@ -101,7 +101,8 @@ class DRV5056(HallBase):
         if not offline:
             exit(1)
 
-        self._tag = tag
+        super().__init__(tag=tag, offline=offline)
+
         self._sensor_num = sensor_num
         self._t_a = t_a
         self._supply_voltage = supply_voltage
@@ -147,12 +148,13 @@ class DRV5056(HallBase):
 
     def update(self, voltage) -> None:
         """Calculate the estimated magnetic response."""
-        self._data = voltage
         self.field_strength = (voltage * self._V_TO_MV - self._QUIESCENT_OFFSET) / (
             self._sensitivity * (1 + (self._s_tc * (self._t_a - 25)))
         )
         if self.range == self.field_strength:
             LOGGER.error("Careful. The sensor may be out of range and your magnetic field may be higher.")
+        
+        return self.field_strength
 
     @property
     def is_streaming(self) -> bool:
@@ -165,7 +167,7 @@ class DRV5056(HallBase):
         return self._streaming
 
     @property
-    def data(self) -> float:
+    def voltage(self) -> float:
         """
         Get the latest Hall effect data in millivolts.
 
@@ -175,11 +177,13 @@ class DRV5056(HallBase):
         return self._data
 
     @property
-    def field_mT(self) -> float:
+    def field_mT(self) -> None:
         """
-        Get the estimated magnetic response.
+        Get the latest Hall effect data in millitesla.
+        """
+        return self.update(self.voltage)
 
-        Returns:
-            float: Magnetic field in mT.
-        """
-        return self.B
+    @property
+    def data(self) -> float:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Data not implemented.")

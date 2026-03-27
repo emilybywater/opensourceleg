@@ -340,14 +340,16 @@ class ADS114S0x(ADCBase):
 
             if not offline:
                 exit(1)
+        
+        super().__init__(tag=tag, offline=offline)
 
-        self._tag = tag
         self._spi_bus = spi_bus
         self._spi_cs = spi_cs
         self._pga_gain = pga_gain
         self._voltage_reference = voltage_reference
         self._streaming = False
         self._data_rate = data_rate
+        LOGGER.info(f"ADC initialized with tag: {self._tag}")
 
     def __repr__(self) -> str:
         return "ADS114S0x"

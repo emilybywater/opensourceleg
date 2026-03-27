@@ -25,6 +25,7 @@ from opensourceleg.sensors.encoder import AS5048B
 from opensourceleg.sensors.encoderCounter import LS7366R
 from opensourceleg.sensors.imu import LordMicrostrainIMU
 from opensourceleg.sensors.hall import DRV5056 
+from opensourceleg.sensors.adc import ADS114S0x
 from opensourceleg.utilities.softrealtimeloop import SoftRealtimeLoop
 from opensourceleg.utilities import Profiler
 import VSOInitialization 
@@ -53,6 +54,7 @@ def controller_main():
         tag ="variableStiffessOrthosis",
         actuators={"ankle": MaxonActuator(offline = OFFLINE, tag = "ankle_actuator", motor_constants = None)},
         sensors={
+                "ADC": ADS114S0x(offline = OFFLINE, tag = "adc"),
                 "motorEncoder": LS7366R(offline = OFFLINE, tag = "encoder_counter_motor"),
                 "ankleEncoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-2', A1_adr_pin=False,
                                           A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
@@ -69,26 +71,28 @@ def controller_main():
     # track specific information using track function in datalog 
     datalog.track_function(elapsed_time, name="time")
     datalog.track_function(lambda: np.rad2deg(vso.sensors["ankleEncoder"].position), name="ankleEncoderPos")
-    datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage")
+    datalog.track_function(vso.actuators["ankle"].motor_encoder_position_perc, name="motorEncoderPosPerc")
+    datalog.track_function(vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
+    datalog.track_function(vso.sensors["hallEffect_2"].voltage, name="hallEffect_2_voltage") # mV
 
-    # with vso, datalog:
+    with vso, datalog:
 
-    #     init = VSOInitialization(vso=vso, homing_pwm=0.45, sample_rate= 0.05,position_threshold = 20)
-    #     init.run(run_calibration=False)  # if not disassembled !
+        init = VSOInitialization(vso=vso, homing_pwm=0.45, sample_rate= 0.05,position_threshold = 20)
+        init.run(run_calibration=False)  # if not disassembled !
 
-    #     input('\nPress any key to begin walking:') 
-    #     vso.update() # call an update of the robot
-    #     loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
+        input('\nPress any key to begin walking:') 
+        vso.update() # call an update of the robot
+        loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
         
-    #     for t in loop:
-    #         profiler.tic() # start the profiler timing 
+        for t in loop:
+            profiler.tic() # start the profiler timing 
             
-    #         vso.update()
-    #         vso.sensors["ankleEncoder"].position - self.load_calib_offset()
-    #         datalog.update() # update values into the datalog  
-    #         datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
+            vso.update()
+            vso.sensors["ankleEncoder"].position - self.load_calib_offset()
+            datalog.update() # update values into the datalog  
+            datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
-    #         profiler.toc() # end the profiler timing 
+            profiler.toc() # end the profiler timing 
 
 
 
