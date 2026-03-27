@@ -40,10 +40,13 @@ OFFLINE = False
 
 # set up logging configurables  
 logName = subjIDCode + '_' + timestamp + '_' + trialNumber
-loggingPath = '/home/pi/VSO_Variable_Stiffness_Orthosis_Controller/Data/Trial'
+loggingPath = '/home/jacbrady/opensourceleg/Data/Trial'
 
 
 def controller_main():
+    
+    # set up logging using the Logger 
+    datalog = Logger(log_path= loggingPath,file_name=logName)
     
     # define the "VSO" robot 
     vso = VSO[MaxonActuator, SensorBase](
@@ -53,23 +56,20 @@ def controller_main():
                 "motorEncoder": LS7366R(offline = OFFLINE, tag = "encoder_counter_motor"),
                 "ankleEncoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-2', A1_adr_pin=False,
                                           A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
-                "hallEffect" : DRV5056(offline = OFFLINE, tag="hall_effect", sensor_num="A1", t_a = 23, supply_voltage =5)
+                "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
+                "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =5),
             },
         )
     profiler = Profiler("ouput_run")
 
+    start = time.monotonic()
+    def elapsed_time():
+        return time.monotonic() - start
     
-    
-    # start = time.monotonic()
-    # def elapsed_time():
-    #     return time.monotonic() - start
-    
-    # # set up logging using the Logger 
-    # datalog = Logger(log_path= loggingPath,file_name=logName)
-    
-    # # track specific information using track function in datalog 
-    # datalog.track_function(elapsed_time, name="time")
-    # datalog.track_function(lambda: np.rad2deg(vso.sensors["ankleEncoder"].position), name="ankleEncoderPos")
+    # track specific information using track function in datalog 
+    datalog.track_function(elapsed_time, name="time")
+    datalog.track_function(lambda: np.rad2deg(vso.sensors["ankleEncoder"].position), name="ankleEncoderPos")
+    datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage")
 
     # with vso, datalog:
 

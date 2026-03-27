@@ -175,7 +175,7 @@ class DRV5056(HallBase):
         return self._data
 
     @property
-    def field_mt(self) -> float:
+    def field_mT(self) -> float:
         """
         Get the estimated magnetic response.
 

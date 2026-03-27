@@ -132,6 +132,10 @@ class MaxonActuator(ActuatorBase):
         self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
         self.motor_position_perc = self.cts_to_perc(self.motor_position_cts)
 
+    def set_motor_impedance(self) -> None:
+        """Set the motor impedance. Not yet supported by this library."""
+        raise NotImplementedError("Set motor impedance not implemented. Motor should be controlled by position or pwm.")
+
     def set_motor_voltage(self) -> None:
         """Set the motor voltage. Not yet supported by this library."""
         raise NotImplementedError("Set motor voltage not implemented. Control the motor by setting PWM.")
@@ -152,6 +156,14 @@ class MaxonActuator(ActuatorBase):
         """Set the output torque. Not yet supported by this library."""
         raise NotImplementedError("Set output torque not implemented. Control the motor by setting PWM.")
 
+    def set_output_impedance(self) -> None:
+        """Set the output impedance. Not yet supported by this library."""
+        raise NotImplementedError("Set output impedance not implemented. Control the motor by setting PWM.")
+
+    def set_impedance_gains(self) -> None:
+        """Set impedance control gains. Not yet supported by this library."""
+        raise NotImplementedError("Set impedance gains not implemented. Motor should be controlled by position or pwm.")
+        
     def set_current_gains(self) -> None:
         """Set current control gains. Not yet supported by this library."""
         raise NotImplementedError("Set current gains not implemented. Motor should be controlled by position or pwm.")

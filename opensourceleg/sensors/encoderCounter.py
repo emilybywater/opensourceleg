@@ -19,6 +19,7 @@ from opensourceleg.sensors.base import (
     EncoderCounterBase,
 )
 
+from opensourceleg.logging import LOGGER
 
 class LS7366R(EncoderCounterBase):
     # -------------------------------------------
@@ -53,13 +54,6 @@ class LS7366R(EncoderCounterBase):
 
         MODES: ClassVar[list[int]] = [ONEBYTE_COUNTER, TWOBYTE_COUNTER, THREEBYTE_COUNTER, FOURBYTE_COUNTER]
 
-    #   Values
-    max_val = 4294967295
-
-    # Global Variables
-
-    counterSize = 4  # Default 4
-
     # ----------------------------------------------
     # Constructor
 
@@ -68,27 +62,34 @@ class LS7366R(EncoderCounterBase):
         CSX: int = 0,
         CLK: int = 1000000,
         BTMD: int = 4,
+        max_val: int = 4294967295, # for four byte mode, only correct for four byte mode
         offline: bool = False,
         tag: str = "encoder_counter",
     ) -> None:
+
+        super().__init__(offline=offline, tag=tag)
+
         self.counterSize = BTMD  # Sets the byte mode that will be used
+        self.max_val = max_val  # Maximum value for the counter, used for signed count conversion
 
         self.spi = spidev.SpiDev()  # Initialize object
         self.spi.open(0, CSX)  # Which CS line will be used
         self.spi.max_speed_hz = CLK  # Speed of clk (modifies speed transaction)
 
         # Init the Encoder
-        print(f"Clearing Encoder CS{CSX!s}'s Count...\t", self.clearCounter())
-        print(f"Clearing Encoder CS{CSX!s}'s Status..\t", self.clearStatus())
+        LOGGER.info(f"Clearing Encoder CS{CSX!s}'s Count...\t")
+        self.clearCounter()
+        LOGGER.info(f"Clearing Encoder CS{CSX!s}'s Status..\t")
+        self.clearStatus()
 
         self.spi.xfer2([self.WRITE_MODE0, self.QUADRATURE_COUNT_MODE])
 
         sleep(0.1)  # Rest
 
-        self.spi.xfer2([self.WRITE_MODE1, self.BYTE_MODE[self.counterSize - 1]])
+        self.spi.xfer2([self.WRITE_MODE1, self.CounterConfig.MODES[self.counterSize - 1]])
 
     def close(self):
-        print("\nThanks for using me! :)")
+        LOGGER.info("Closing Encoder...")
         self.spi.close()
 
     def clearCounter(self):
@@ -123,6 +124,18 @@ class LS7366R(EncoderCounterBase):
 
         return data[1]
 
+    def start(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Start not implemented.")
+
+    def stop(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Stop not implemented.")
+
+    def update(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Update not implemented.")
+
     @property
     def count(self) -> None:
         """Not yet supported by this library."""
@@ -137,18 +150,3 @@ class LS7366R(EncoderCounterBase):
     def is_streaming(self) -> None:
         """Not yet supported by this library."""
         raise NotImplementedError("Is streaming not implemented.")
-
-    
-
-
-if __name__ == "__main__":
-    from time import sleep
-
-    encoder = LS7366R(0, 1000000, 4)
-    try:
-        while True:
-            print("Encoder count: ", encoder.readCounter(), " Press CTRL-C to terminate test program.")
-            sleep(0.5)
-    except KeyboardInterrupt:
-        encoder.close()
-        print("All done, bye bois.")
