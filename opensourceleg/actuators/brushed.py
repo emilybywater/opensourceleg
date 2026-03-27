@@ -67,7 +67,6 @@ class MaxonActuator(ActuatorBase):
 
     def __init__(
         self,
-        encoder_counter,
         enable_pin: int = 12,
         ina_pin: int = 24,
         inb_pin: int = 25,
@@ -77,6 +76,9 @@ class MaxonActuator(ActuatorBase):
         pwm_maximum_command: float = 0.85,
         pwm_minimum_command: float = 0.07,
         pwm_lower_limit: float = 0.02,
+        encoder_counter = None,
+        tag: str = "maxon_actuator",
+        motor_constants = None,
     ) -> None:
         """
         Initialize Maxon motor.
@@ -84,15 +86,14 @@ class MaxonActuator(ActuatorBase):
         super().__init__(
             gear_ratio=gear_ratio,
             offline=offline,
+            tag=tag,
+            motor_constants=motor_constants,
+            frequency = frequency,
         )
 
         self.enable_pin = enable_pin
         self.ina_pin = ina_pin
         self.inb_pin = inb_pin
-        self.gear_ratio = gear_ratio
-        self.frequency = frequency
-
-        self.offline = offline
 
         self.pwm_maximum_command = pwm_maximum_command
         self.pwm_minimum_command = pwm_minimum_command
@@ -100,7 +101,7 @@ class MaxonActuator(ActuatorBase):
 
         self.encoder_counter = encoder_counter
 
-        if not self.offline:
+        if not self._is_offline:
             self.direction = Motor(forward=ina_pin, backward=inb_pin)
             self.speed_control = PWMOutputDevice(enable_pin)
             LOGGER.info("Initialized Maxon x VNH7070AY.")
@@ -124,7 +125,10 @@ class MaxonActuator(ActuatorBase):
 
     def update(self) -> None:
         """Updates the actuator's data with encoder counter reading."""
-        self.motor_position_cts = self.encoder_counter.readCounter()
+        if self.encoder_counter:
+            self.motor_position_cts = self.encoder_counter.readCounter()
+        else:
+            self.motor_position_cts = None
         self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
         self.motor_position_perc = self.cts_to_perc(self.motor_position_cts)
 

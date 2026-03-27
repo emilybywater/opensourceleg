@@ -1,30 +1,26 @@
-#!/usr/bin/python3
+""" 
+Original author, Federico Bolanos. 
+Updated by Cameron Cobb for Python 3 (March 17th, 2019).
+Updated by David Lam for opensourceleg (March, 2026).
+Updated by Emily Bywater, also for opensourceleg (March, 2026)
 
-# NOTE: All credit goes to Federico Bolanos. His original repo is here: https://github.com/fbolanos/LS7366R/blob/master/LS7366R.py
-# I, Cameron Cobb, have updated this library to make it work for my needs
-# and to make it usable for Python 3.
-
-# Make sure you watch the video and check schematic for proper wiring.
-
-# Python library to interface with the chip LS7366R for the Raspberry Pi
-# Written by Federico Bolanos
-# Last Edit: March 17th 2019 - Cameron Cobb
-# Reason: Updated for Python 3.0 and above.
-
-# Make sure you do a "pip install spidev"
-
-# Usage: import LS7366R then create an object by calling enc = LS7366R(CSX, CLK, BTMD)
-# CSX is either CE0 or CE1, CLK is the speed, BTMD is the bytemode 1-4 the resolution of your counter.
-# example: lever.Encoder(0, 1000000, 4)
-# These are the values I normally use.
+Usage: import LS7366R then create an object by calling enc = LS7366R(CSX, CLK, BTMD)
+CSX is either CE0 or CE1, CLK is the speed, BTMD is the bytemode 1-4 the resolution of your counter.
+example: lever.Encoder(0, 1000000, 4)
+These are the default values.
+"""
 
 from time import sleep
 from typing import ClassVar, Final
 
 import spidev
 
+from opensourceleg.sensors.base import (
+    EncoderCounterBase,
+)
 
-class LS7366R:
+
+class LS7366R(EncoderCounterBase):
     # -------------------------------------------
     # Constants
 
@@ -72,6 +68,8 @@ class LS7366R:
         CSX: int = 0,
         CLK: int = 1000000,
         BTMD: int = 4,
+        offline: bool = False,
+        tag: str = "encoder_counter",
     ) -> None:
         self.counterSize = BTMD  # Sets the byte mode that will be used
 
@@ -124,6 +122,23 @@ class LS7366R:
         data = self.spi.xfer2([self.READ_STATUS, 0xFF])
 
         return data[1]
+
+    @property
+    def count(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Count not implemented.")
+
+    @property
+    def data(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Data not implemented.")
+
+    @property
+    def is_streaming(self) -> None:
+        """Not yet supported by this library."""
+        raise NotImplementedError("Is streaming not implemented.")
+
+    
 
 
 if __name__ == "__main__":
