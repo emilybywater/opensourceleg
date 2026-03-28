@@ -204,26 +204,23 @@ class MaxonActuator(ActuatorBase):
             self.set_motor_direction_forward()
 
         self.set_motor_pwm(homing_pwm)
-        time.sleep(0.1)
-        self.update()
-        last_position = self.motor_position_cts
-        # print(last_position)
-        # self.stop()
+        time.sleep(0.1)  #
+        self.stop()
 
-        while keep_going:
-            self.update()
-            last_position = self.motor_position_cts
-            time.sleep(sample_rate)
+        # while keep_going:
+        #     self.update()
+        #     last_position = self.motor_position_cts
+        #     time.sleep(sample_rate)
 
-            self.update()
-            error = self.motor_position_cts - last_position
-            if -position_threshold <= error <= position_threshold:
-                self.stop()
-                keep_going = False
+        #     self.update()
+        #     error = self.motor_position_cts - last_position
+        #     if -position_threshold <= error <= position_threshold:
+        #         self.stop()
+        #         keep_going = False
 
-        # --- CALLBACK EXECUTION ---
-        if callback is not None:
-            callback()  # This executes the function passed in
+        # # --- CALLBACK EXECUTION ---
+        # if callback is not None:
+        #     callback()  # This executes the function passed in
     
     @property
     def motor_encoder_position_perc(self) -> float:

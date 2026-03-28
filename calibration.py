@@ -24,14 +24,18 @@ class VSOCalibration:
 
     def __init__(
         self,
+        vso,
         actuator,
         encoder,
         calibration_path: Path = DEFAULT_CALIBRATION_PATH,
     ) -> None:
+        self.vso = vso
         self.actuator = actuator
         self.encoder = encoder
         self.calibration_path = calibration_path
         self.scale_perc: Optional[float] = None
+
+        LOGGER.info("VSOCalibration instance created.")
 
     def run(
         self,
@@ -56,7 +60,7 @@ class VSOCalibration:
         """
         LOGGER.info("Starting VSO stroke calibration: moving to 0%.")
         
-        self.actuator.home(homing_pwm=homing_pwm, 
+        self.vso.home(homing_pwm=homing_pwm, 
                            sample_rate=sample_rate, 
                            position_threshold=position_threshold,
                            home_zero=True)
@@ -65,7 +69,7 @@ class VSOCalibration:
 
         time.sleep(1)
 
-        self.actuator.home(homing_pwm=homing_pwm,
+        self.vso.home(homing_pwm=homing_pwm,
                            sample_rate=sample_rate,
                            position_threshold=position_threshold,
                            home_zero=False)
@@ -79,7 +83,7 @@ class VSOCalibration:
         time.sleep(1)
 
         LOGGER.info("Returning to 0%.")
-        self.actuator.home(homing_pwm=homing_pwm,
+        self.vso.home(homing_pwm=homing_pwm,
                            sample_rate=sample_rate,
                            position_threshold=position_threshold,
                            home_zero=True)

@@ -64,24 +64,26 @@ class VSOInitialization:
             If False, assumes calibration file exists.
         """
 
-        # Step 1: Optional stroke calibration
-        if run_calibration:
-            LOGGER.info("Running stroke calibration.")
-            actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
-            encoder_counter = self.vso.sensors["motor_encoder"]
-            calibration = VSOCalibration(
-                actuator=actuator,
-                encoder = encoder_counter,
-                calibration_path=self.calibration_path,
-            )
-            scale_perc = calibration.run(
-                homing_pwm=self.homing_pwm,
-                sample_rate=self.sample_rate,
-                position_threshold=self.position_threshold,
-            )
-            LOGGER.info(f"Stroke calibration complete. scale_perc={scale_perc:.2f}")
-        else:
-            LOGGER.info("Skipping stroke calibration. Assuming calibration file exists.")
+        # actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
+        # encoder_counter = self.vso.sensors["motor_encoder"]
+        # calibration = VSOCalibration(
+        #     vso=self.vso,
+        #     actuator=actuator,
+        #     encoder = encoder_counter,
+        #     calibration_path=self.calibration_path,
+        # )
+
+        # # Step 1: Optional stroke calibration
+        # if run_calibration:
+        #     LOGGER.info("Running stroke calibration.")
+        #     scale_perc = calibration.run(
+        #         homing_pwm=self.homing_pwm,
+        #         sample_rate=self.sample_rate,
+        #         position_threshold=self.position_threshold,
+        #     )
+        #     LOGGER.info(f"Stroke calibration complete. scale_perc={scale_perc:.2f}")
+        # else:
+        #     LOGGER.info("Skipping stroke calibration. Assuming calibration file exists.")
 
         # Step 2: Encoder homing — zero at soft stop%
         LOGGER.info("Homing to soft stop and zeroing encoder.")
@@ -89,11 +91,12 @@ class VSOInitialization:
             homing_pwm=self.homing_pwm,
             sample_rate=self.sample_rate,
             position_threshold=self.position_threshold,
+            home_zero=True
         )
-        # actuator = next(iter(self.vso.actuators.values()))
+        
         # encoder_counter.clearCounter()
         # time.sleep(0.5)  # Ensure encoder clear is seen before moving
-        # LOGGER.info(f"Encoder zeroed. Motor position: {actuator.position} mm")
+        # LOGGER.info(f"Encoder zeroed.")
 
         # LOGGER.info("Moving spring-support to stiffest position (100%).")
         # scale_perc = calibration.load()
@@ -112,7 +115,7 @@ class VSOInitialization:
         # LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} rad")
 
 
-        # LOGGER.info("VSO initialization complete.")
+        LOGGER.info("VSO initialization complete.")
 
     def _save_calib_offset(self, calib_offset: float) -> None:
         """
