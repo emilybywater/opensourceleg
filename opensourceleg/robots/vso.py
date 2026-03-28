@@ -36,7 +36,7 @@ class VSO(RobotBase[TActuator, TSensor]):
 
     def home(
         self,
-        homing_pwm: int = 0.45,
+        homing_pwm: int = 0.25,
         sample_rate: float = 0.05,
         position_threshold: int = 200,
         home_zero: bool = 1,
@@ -45,18 +45,18 @@ class VSO(RobotBase[TActuator, TSensor]):
         """
             Call the home method for all motors.
 
-        #     Args:
-        #         homing_pwm: The pwm to apply to the motors during homing.
-        #         sample_rate: The time slept between each move during homing.
-        #         position_threshold: Minimum error between the last encoder movement and now to stop homing.
-        #             Default is 200 for the motor but may want to change if flex coupler attached.
-        #         home_zero: Determines the direction of homing. Should be True to move to 0% stiffness and
-                      false to move to 100% stiffness.
-        #         callbacks  Optional[dict[str, Callable]]:
-        #             Optional dictionary of callback functions, one per motor, to be called when each motor's
-        #             homing completes. Only one callback per motor is supported, and the tag must match.
-        #             Each function should take no arguments and return None. If None, no callbacks are used.
-        #"""
+            Args:
+            homing_pwm: The pwm to apply to the motors during homing.
+            sample_rate: The time slept between each move during homing.
+            position_threshold: Minimum error between the last encoder movement and now to stop homing.
+            Default is 200 for the motor but may want to change if flex coupler attached.
+            home_zero: Determines the direction of homing. Should be True to move to 0% stiffness and
+                false to move to 100% stiffness.
+            callbacks  Optional[dict[str, Callable]]:
+                Optional dictionary of callback functions, one per motor, to be called when each motor's
+                homing completes. Only one callback per motor is supported, and the tag must match.
+                Each function should take no arguments and return None. If None, no callbacks are used.
+        """
 
         LOGGER.info("Starting VSO homing routine.")
 

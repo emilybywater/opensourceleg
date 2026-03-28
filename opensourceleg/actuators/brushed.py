@@ -4,6 +4,7 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 from gpiozero import Motor, PWMOutputDevice
+from gpiozero.pins.lgpio import LGPIOFactory
 
 from opensourceleg.actuators.base import (
     CONTROL_MODE_CONFIGS,
@@ -76,7 +77,6 @@ class MaxonActuator(ActuatorBase):
         pwm_maximum_command: float = 0.85,
         pwm_minimum_command: float = 0.07,
         pwm_lower_limit: float = 0.02,
-        encoder_counter = None,
         tag: str = "maxon_actuator",
         motor_constants = None,
     ) -> None:
@@ -99,11 +99,15 @@ class MaxonActuator(ActuatorBase):
         self.pwm_minimum_command = pwm_minimum_command
         self.pwm_lower_limit = pwm_lower_limit
 
-        self.encoder_counter = encoder_counter
-
         if not self._is_offline:
+            self._factory = LGPIOFactory()
+        
+            self.speed_control = PWMOutputDevice(
+                enable_pin, 
+                pin_factory=self._factory, 
+                frequency=self.frequency
+            )
             self.direction = Motor(forward=ina_pin, backward=inb_pin)
-            self.speed_control = PWMOutputDevice(enable_pin)
             LOGGER.info("Initialized Maxon x VNH7070AY.")
         else:
             LOGGER.info("Called brushed motor initialization in offline mode.")
@@ -116,17 +120,18 @@ class MaxonActuator(ActuatorBase):
         """
         Not supported.
         """
-        raise NotImplementedError("Start not implemented.")
+        pass
 
     def stop(self) -> None:
         """Stops the motor."""
-        self.direction.stop()
+        
         self.speed_control.value = 0
+        self.direction.stop()
 
     def update(self) -> None:
         """Updates the actuator's data with encoder counter reading."""
         if self.encoder_counter:
-            self.motor_position_cts = self.encoder_counter.count()
+            self.motor_position_cts = self.encoder_counter.count
         else:
             self.motor_position_cts = None
         self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
@@ -180,7 +185,7 @@ class MaxonActuator(ActuatorBase):
 
     def home(
         self,
-        homing_pwm: float = 0.45,
+        homing_pwm: float = 0.25,
         sample_rate: float = 0.05,
         position_threshold: int = 200,
         home_zero: bool = True,
@@ -194,23 +199,24 @@ class MaxonActuator(ActuatorBase):
         keep_going = True
 
         if home_zero:
-            self.set_motor_direction_backward(self)
+            self.set_motor_direction_backward()
         else:
-            self.set_motor_direction_forward(self)
+            self.set_motor_direction_forward()
 
         self.set_motor_pwm(homing_pwm)
         time.sleep(0.1)
+        self.stop()
 
-        while keep_going:
-            self.update()
-            last_position = self.motor_position_cts
-            time.sleep(sample_rate)
+        # while keep_going:
+        #     self.update()
+        #     last_position = self.motor_position_cts
+        #     time.sleep(sample_rate)
 
-            self.update()
-            error = self.motor_position_cts - last_position
-            if -position_threshold <= error <= position_threshold:
-                self.stop()
-                keep_going = False
+        #     self.update()
+        #     error = self.motor_position_cts - last_position
+        #     if -position_threshold <= error <= position_threshold:
+        #         self.stop()
+        #         keep_going = False
 
         # --- CALLBACK EXECUTION ---
         if callback is not None:
@@ -314,7 +320,7 @@ class MaxonActuator(ActuatorBase):
         slider_max_perc: float = 99.5,
         slider_min_perc: float = 0.5,
         allowable_coupler_drift: float = -0.2,
-        time_limit=15.0,
+        time_limit: float =15.0,
     ) -> None:
         """
         Designed for the Variable Stiffness Orthosis
@@ -397,15 +403,21 @@ class MaxonActuator(ActuatorBase):
 
     def set_motor_pwm(self, pwm: float) -> None:
         """Set the motor pwm rate."""
-        # TODO: Set frequency for the motor
         if pwm > self.pwm_maximum_command:
+            LOGGER.info('PWM command above maximum. Setting to maximum.')
             pwm = self.pwm_maximum_command
         elif pwm < self.pwm_minimum_command and pwm >= self.pwm_lower_limit:
+            LOGGER.info('PWM command below minimum. Setting to minimum.')
             pwm = self.pwm_minimum_command
         elif pwm < self.pwm_lower_limit:
+            LOGGER.info('PWM command below lower limit. Setting to zero.')
             pwm = 0.0
 
         self.speed_control.value = pwm
+
+    def set_motor_encoder(self, encoder_counter) -> None:
+        """Set the motor encoder counter."""
+        self.encoder_counter = encoder_counter
 
 
 if __name__ == "__main__":

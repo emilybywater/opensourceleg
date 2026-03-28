@@ -40,16 +40,19 @@ class VSOInitialization:
         vso: VSO,
         calibration_path: Path = Path("vso_calibration.json"),
         calib_offset_path: Path = DEFAULT_CALIB_OFFSET_PATH,
-        homing_pwm: int = 45,
+        homing_pwm: float = 0.25,
         sample_rate: float = 0.05,
         position_threshold: int = 200,
     ) -> None:
+
         self.vso = vso
         self.calibration_path = calibration_path
         self.calib_offset_path = calib_offset_path
         self.homing_pwm = homing_pwm
         self.sample_rate = sample_rate
         self.position_threshold = position_threshold
+
+        LOGGER.info("VSO Initialization instance created.")
 
     def run(self, run_calibration: bool = False) -> None:
         """
@@ -60,16 +63,12 @@ class VSOInitialization:
             Use after disassembly or first-time setup. 
             If False, assumes calibration file exists.
         """
-        adc = self.vso.sensors["ADC"]
-        adc.start()
-        ankle_sensor = self.vso.sensors["ankle_encoder"]
-        ankle_sensor.start()
 
         # Step 1: Optional stroke calibration
         if run_calibration:
             LOGGER.info("Running stroke calibration.")
             actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
-            encoder_counter = self.vso.sensors["motorEncoder"]
+            encoder_counter = self.vso.sensors["motor_encoder"]
             calibration = VSOCalibration(
                 actuator=actuator,
                 encoder = encoder_counter,
@@ -91,29 +90,29 @@ class VSOInitialization:
             sample_rate=self.sample_rate,
             position_threshold=self.position_threshold,
         )
-        actuator = next(iter(self.vso.actuators.values()))
-        encoder_counter.clearCounter()
-        time.sleep(0.5)  # Ensure encoder clear is seen before moving
-        LOGGER.info(f"Encoder zeroed. Motor position: {actuator.position} mm")
+        # actuator = next(iter(self.vso.actuators.values()))
+        # encoder_counter.clearCounter()
+        # time.sleep(0.5)  # Ensure encoder clear is seen before moving
+        # LOGGER.info(f"Encoder zeroed. Motor position: {actuator.position} mm")
 
-        LOGGER.info("Moving spring-support to stiffest position (100%).")
-        scale_perc = calibration.load()
+        # LOGGER.info("Moving spring-support to stiffest position (100%).")
+        # scale_perc = calibration.load()
 
-        actuator.position_control_init()
-        actuator.position_control_config(scale_perc=scale_perc)
+        # actuator.position_control_init()
+        # actuator.position_control_config(scale_perc=scale_perc)
 
-        sliderPosition.slider_position(position_percent=99.5)
+        # sliderPosition.slider_position(position_percent=99.5)
 
-        # Step 3: Ankle encoder offset calibration at 100% stiffness
-        LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
-        time.sleep(2)  # Warmup period for ankle encoder to stabilize
-        ankle_sensor.update()
-        calib_offset = self.side*np.rad2deg(ankle_sensor.position)
-        self._save_calib_offset(calib_offset)
-        LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} rad")
+        # # Step 3: Ankle encoder offset calibration at 100% stiffness
+        # LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
+        # time.sleep(2)  # Warmup period for ankle encoder to stabilize
+        # ankle_sensor.update()
+        # calib_offset = self.side*np.rad2deg(ankle_sensor.position)
+        # self._save_calib_offset(calib_offset)
+        # LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} rad")
 
 
-        LOGGER.info("VSO initialization complete.")
+        # LOGGER.info("VSO initialization complete.")
 
     def _save_calib_offset(self, calib_offset: float) -> None:
         """

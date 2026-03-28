@@ -128,11 +128,11 @@ class LS7366R(EncoderCounterBase):
 
     def start(self) -> None:
         """Not yet supported by this library."""
-        raise NotImplementedError("Start not implemented.")
+        pass
 
     def stop(self) -> None:
         """Not yet supported by this library."""
-        raise NotImplementedError("Stop not implemented.")
+        pass
 
     def update(self) -> None:
         """Not yet supported by this library."""

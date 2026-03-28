@@ -526,7 +526,6 @@ class ADS114S0x(ADCBase):
 
         # Build TX array
         data_tx = [self._OPCODE_RREG | (address & self._OPCODE_RWREG_MASK), 0, 0]
-
         # Send and receive
         data_rx = self.spi_send_receive_arrays(data_tx, self._COMMAND_LENGTH + 1)
 
@@ -777,7 +776,7 @@ class ADS114S0x(ADCBase):
         """
         sleep(delay_time_ms / 1000.0)
 
-    def delay_us(delay_time_us: int) -> None:
+    def delay_us(self, delay_time_us: int) -> None:
         """
         Provides a timing delay with microsecond resolution
 

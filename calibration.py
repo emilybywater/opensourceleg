@@ -35,7 +35,7 @@ class VSOCalibration:
 
     def run(
         self,
-        homing_pwm: int = 0.45,
+        homing_pwm: int = 0.25,
         sample_rate: float = 0.05,
         position_threshold: int = 200,
     ) -> float:
