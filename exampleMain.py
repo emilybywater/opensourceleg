@@ -96,7 +96,7 @@ def controller_main():
     with vso, datalog:
         LOGGER.info("Starting VSO initialization sequence...")
         init = VSOInitialization(vso=vso)
-        init.run(run_calibration=False)  # if not disassembled !
+        init.run(run_calibration=True)  # if not disassembled !
 
         # input('\nPress any key to begin walking:') 
         # vso.update() # call an update of the robot
