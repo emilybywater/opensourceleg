@@ -69,6 +69,14 @@ class VSOInitialization:
         actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
         encoder_counter = self.vso.sensors["motor_encoder"]
         ankle_sensor = self.vso.sensors["ankle_encoder"]
+        adc = self.vso.sensors["adc"]
+
+        adc.adc_configure_common(single_shot=True,filter_low_latency=False)
+        
+        if self.vso.sensors.get("hallEffect_1", None) is not None:
+            adc.set_mux_single_ended(adc._ADS_P_AIN3)
+            adc.discard_settling_reads(timeout_ms=1000)
+
         calibration = VSOCalibration(
             vso=self.vso,
             actuator=actuator,

@@ -98,9 +98,9 @@ class DRV5056(HallBase):
             supply_voltage (float): Power supply voltage. Default is 5 V.
 
         """
-        if not offline:
+        if offline:
             exit(1)
-
+        
         super().__init__(tag=tag, offline=offline)
 
         self._sensor_num = sensor_num

@@ -395,7 +395,7 @@ class MaxonActuator(ActuatorBase):
     def check_coupler_drift(self) -> None:
         if self.allowable_coupler_drift < self.motor_position_mm < 0:
             LOGGER.warning("Coupler has drifted a little, but probably not an issue yet")
-            LOGGER.info("motor_position_mm", self.motor_position_mm)
+            LOGGER.info(f"motor_position_mm: {self.motor_position_mm:.4f}")
 
         if self.motor_position_mm <= self.allowable_coupler_drift:
             LOGGER.warning(
@@ -403,7 +403,7 @@ class MaxonActuator(ActuatorBase):
                 "Coupler should be flush with the lead screw, as far away from motor as "
                 "possible for accurate stiffness reports."
             )
-            LOGGER.info("motor_position_mm", self.motor_position_mm)
+            LOGGER.info(f"motor_position_mm: {self.motor_position_mm:.4f}")
 
     def set_motor_direction_forward(self) -> None:
         """Set the motor direction to be forwards."""

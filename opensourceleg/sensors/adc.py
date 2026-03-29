@@ -5,7 +5,7 @@ Module for communicating with the ADS131M0x and ADS114S0x family of ADC chips.
 import math
 from dataclasses import dataclass
 from enum import Enum
-from time import sleep
+from time import sleep, time
 from typing import Any, Callable, ClassVar, Optional
 
 import numpy as np
@@ -316,6 +316,7 @@ class ADS114S0x(ADCBase):
         data_rate: int = 500,
         pga_gain: int = 1,
         voltage_reference: float = _INT_VREF,
+        drdy: int = 16,
         offline: bool = False,
     ):
         """
@@ -349,7 +350,9 @@ class ADS114S0x(ADCBase):
         self._voltage_reference = voltage_reference
         self._streaming = False
         self._data_rate = data_rate
+        self._DRDY_PIN = drdy
         LOGGER.info(f"ADC initialized with tag: {self._tag}")
+
 
     def __repr__(self) -> str:
         return "ADS114S0x"
@@ -368,33 +371,11 @@ class ADS114S0x(ADCBase):
         # Toggle RESET pin to assure default register settings
         self.reset()
 
-        # Check if device is ready
-        status = self.read_single_register(self._REG_ADDR_STATUS)
-        if status & self._ADS_nRDY_MASK:
-            LOGGER.info("Device not ready")  # Device not ready
-            return
-
         # Ensure internal register array is initialized
         self.restore_register_defaults()
 
         # Configure initial device register settings
         self.write_single_register(self._REG_ADDR_STATUS, 0x00)  # Reset POR event
-
-        # Create temporary array based on desired configuration
-        init_register_map = self._register_map.copy()
-
-        # Read back all registers except status register
-        self.read_multiple_registers(self._REG_ADDR_ID, self._NUM_REGISTERS)
-
-        # Verify register configuration
-        for i in range(self._REG_ADDR_STATUS, self._REG_ADDR_SYS - self._REG_ADDR_STATUS + 1):
-            if i == self._REG_ADDR_STATUS:
-                continue
-            if init_register_map[i] != self._register_map[i]:
-                LOGGER.info("Device not ready")
-                return
-
-        self._set_device_state(1)
         LOGGER.info("ADC started successfully.")
 
     def _set_device_state(self, state: int) -> None:
@@ -443,21 +424,13 @@ class ADS114S0x(ADCBase):
             self.discard_settling_reads(n=ch.settle_reads)
 
         # 3. Trigger and Fetch
-        self.start()
-        code16, _ = self.wait_and_read_code16(timeout_ms=200)
+        self.send_start()
+        code16, _ = self.wait_and_read_code16(timeout_ms=500)
 
         volts = self.code16_to_volts(code16, self._voltage_reference, gain)
         return volts
 
-    def _ready_to_read(self) -> bool:
-        """
-        Check if all ADC channels are ready for a new data read.
-
-        Returns:
-            bool: True if the status register indicates readiness; otherwise, False.
-        """
-        reply = self.read_single_register(self._REG_ADDR_STATUS)
-        return reply == self._ADS_nRDY_MASK
+    
 
     # Properties required by SensorBase
     @property
@@ -904,7 +877,7 @@ class ADS114S0x(ADCBase):
         """
         for i in range(256):
             value = i & 0xFF
-            self._crc_lookup_table[i] = self._calculate_crc([value], 1, 0x00)
+            self._crc_lookup_table[i] = self._calculate_crc([value], 1)
 
     def _lookup_crc(self, data_bytes: list[int], number_bytes: int) -> int:
         """
@@ -980,7 +953,7 @@ class ADS114S0x(ADCBase):
         ok = self.wait_for_drdy_htol(timeout_ms)
         if not ok:
             raise TimeoutError(f"Timeout waiting for DRDY (>{timeout_ms} ms)")
-
+        
         code16, status = self.read_converted_data(mode=self.ReadMode.DIRECT)
         return code16, status
 
@@ -989,8 +962,8 @@ class ADS114S0x(ADCBase):
         Discard a few reads after changing MUX to reduce charge-injection artifacts.
         """
         for _ in range(max(0, n)):
-            self.send_start(self._spi)
-            _ = self.wait_and_read_code16(self._spi, timeout_ms=timeout_ms)
+            self.send_start()
+            _ = self.wait_and_read_code16(timeout_ms=timeout_ms)
 
     def code16_to_volts(code16: int, *, vref_volts: float, gain: int) -> float:
         """

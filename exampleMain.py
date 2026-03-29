@@ -59,10 +59,10 @@ def controller_main():
         actuators={"ankle": MaxonActuator(offline = OFFLINE, tag = "ankle_actuator", motor_constants = None, frequency=10000)},
         sensors={
                 "motor_encoder": LS7366R(offline = OFFLINE, tag = "encoder_counter_motor"),
-                # "ADC": ADS114S0x(offline = OFFLINE, tag = "adc"),
+                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", data_rate=1000, drdy=16),
                 "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
                                           A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
-                # "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
+                "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
                 # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =5),
             },
         )
@@ -85,7 +85,7 @@ def controller_main():
     datalog.track_function(elapsed_time, name="time")
     datalog.track_function(lambda: vso.actuators["ankle"].motor_encoder_position_perc, name="motorEncoderPosPerc")
     datalog.track_function(lambda: np.rad2deg(vso.sensors["ankle_encoder"].position), name="ankleEncoderPos")
-    # datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
+    datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
     # datalog.track_function(lambda: vso.sensors["hallEffect_2"].voltage, name="hallEffect_2_voltage") # mV
     
     LOGGER.info("Finished setting up datalogger...")
@@ -95,7 +95,8 @@ def controller_main():
 
         LOGGER.info("Starting VSO initialization sequence...")
         init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
-        init.run(run_calibration=True)  # if not disassembled !
+        init.run(run_calibration=False)  # if not disassembled !
+
 
         # input('\nPress any key to begin walking:') 
         # vso.update() # call an update of the robot

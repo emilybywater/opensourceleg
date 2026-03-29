@@ -56,10 +56,8 @@ class sliderPosition:
                     return
 
                 error_encoder = int(desired_position_encoder - MaxonActuator.motor_position_cts)
-                print(error_encoder)
 
                 pwm = MaxonActuator.pid_ctrl_position(error_encoder, dt)
-                print(pwm)
 
                 
                 if pwm > 0.0:
