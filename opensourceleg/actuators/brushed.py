@@ -10,6 +10,7 @@ from opensourceleg.actuators.base import (
     CONTROL_MODE_CONFIGS,
     ActuatorBase,
     ControlModeConfig,
+    CONTROL_MODES
 )
 from opensourceleg.logging import LOGGER
 
@@ -45,11 +46,19 @@ def radians_to_degrees(radians: float) -> float:
     return radians * 180.0 / np.pi
 
 
+def _maxon_position_mode_entry(maxon_actuator: "MaxonActuator") -> None:
+    LOGGER.debug(msg=f"[{maxon_actuator.tag}]  Entering Position control mode.")
+
+
+def _maxon_position_mode_exit(maxon_actuator: "MaxonActuator") -> None:
+    LOGGER.debug(msg=f"[{maxon_actuator.tag}]  Exiting Position control mode.")
+    maxon_actuator.stop()
+
 MAXON_CONTROL_MODE_CONFIGS = CONTROL_MODE_CONFIGS(
     POSITION=ControlModeConfig(
-        entry_callback=None,
-        exit_callback=None,
-        has_gains=True,
+        entry_callback=_maxon_position_mode_entry,
+        exit_callback=_maxon_position_mode_exit,
+        has_gains=False,
         max_gains=None,
     ),
     CURRENT=None,  # CURRENT mode not supported.
@@ -199,28 +208,31 @@ class MaxonActuator(ActuatorBase):
         keep_going = True
 
         if home_zero:
+            LOGGER.info("Homing to zero position (0% stiffness).")
             self.set_motor_direction_backward()
+            time.sleep(0.5)  # Ensure direction is set before applying PWM
         else:
+            LOGGER.info("Homing to hard stop (100% stiffness).")
             self.set_motor_direction_forward()
+            time.sleep(0.5)  # Ensure direction is set before applying PWM
 
         self.set_motor_pwm(homing_pwm)
-        time.sleep(0.1)  #
-        self.stop()
+        
 
-        # while keep_going:
-        #     self.update()
-        #     last_position = self.motor_position_cts
-        #     time.sleep(sample_rate)
+        while keep_going:
+            self.update()
+            last_position = self.motor_position_cts
+            time.sleep(sample_rate)
 
-        #     self.update()
-        #     error = self.motor_position_cts - last_position
-        #     if -position_threshold <= error <= position_threshold:
-        #         self.stop()
-        #         keep_going = False
+            self.update()
+            error = self.motor_position_cts - last_position
+            if -position_threshold <= error <= position_threshold:
+                self.stop()
+                keep_going = False
 
-        # # --- CALLBACK EXECUTION ---
-        # if callback is not None:
-        #     callback()  # This executes the function passed in
+        # --- CALLBACK EXECUTION ---
+        if callback is not None:
+            callback()  # This executes the function passed in
     
     @property
     def motor_encoder_position_perc(self) -> float:
@@ -418,6 +430,7 @@ class MaxonActuator(ActuatorBase):
     def set_motor_encoder(self, encoder_counter) -> None:
         """Set the motor encoder counter."""
         self.encoder_counter = encoder_counter
+
 
 
 if __name__ == "__main__":

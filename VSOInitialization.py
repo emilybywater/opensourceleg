@@ -42,7 +42,8 @@ class VSOInitialization:
         calib_offset_path: Path = DEFAULT_CALIB_OFFSET_PATH,
         homing_pwm: float = 0.25,
         sample_rate: float = 0.05,
-        position_threshold: int = 200,
+        position_threshold: int = 100,
+        side: int = 1, # 1 for left leg lateral encoder (-1 if medial), -1 for right leg lateral encoder (1 if medial)
     ) -> None:
 
         self.vso = vso
@@ -51,6 +52,7 @@ class VSOInitialization:
         self.homing_pwm = homing_pwm
         self.sample_rate = sample_rate
         self.position_threshold = position_threshold
+        self.side = side
 
         LOGGER.info("VSO Initialization instance created.")
 
@@ -66,6 +68,7 @@ class VSOInitialization:
 
         actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
         encoder_counter = self.vso.sensors["motor_encoder"]
+        ankle_sensor = self.vso.sensors["ankle_encoder"]
         calibration = VSOCalibration(
             vso=self.vso,
             actuator=actuator,
@@ -101,18 +104,18 @@ class VSOInitialization:
         LOGGER.info("Moving spring-support to stiffest position (100%).")
         scale_perc = calibration.load()
 
-        # actuator.position_control_init()
-        # actuator.position_control_config(scale_perc=scale_perc)
+        actuator.position_control_init()
+        actuator.position_control_config(scale_perc=scale_perc)
 
-        # sliderPosition.slider_position(position_percent=99.5)
+        sliderPosition.slider_position(actuator, desired_position_perc=99.5)
 
-        # # Step 3: Ankle encoder offset calibration at 100% stiffness
-        # LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
-        # time.sleep(2)  # Warmup period for ankle encoder to stabilize
-        # ankle_sensor.update()
-        # calib_offset = self.side*np.rad2deg(ankle_sensor.position)
-        # self._save_calib_offset(calib_offset)
-        # LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} rad")
+        # Step 3: Ankle encoder offset calibration at 100% stiffness
+        LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
+        time.sleep(2)  # Warmup period for ankle encoder to stabilize
+        ankle_sensor.update()
+        calib_offset = self.side*np.rad2deg(ankle_sensor.position)
+        self._save_calib_offset(calib_offset)
+        LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} deg")
 
 
         LOGGER.info("VSO initialization complete.")

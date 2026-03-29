@@ -1,6 +1,5 @@
 import time
 import numpy as np
-from opensourceleg.actuators.brushed import MaxonActuator
 from opensourceleg.logging import LOGGER
 
 class sliderPosition:
@@ -11,7 +10,7 @@ class sliderPosition:
     which can be either based on a number of mm or a % of the total stroke.
     """
 
-    def slider_position(self, desired_position_perc) -> None:
+    def slider_position(MaxonActuator, desired_position_perc) -> None:
         """
         PID control of the VSO spring support including pwm saturation, small position deadband,
         and killing the motor when the transmission is too loaded
@@ -30,7 +29,7 @@ class sliderPosition:
 
                 MaxonActuator.update()
 
-                ankle_in_range = check_ankle_position()
+                ankle_in_range = True # TODO: add a check_ankle_position() for when not testing on desktop
 
                 if not ankle_in_range:
                     MaxonActuator.stop()
@@ -57,20 +56,22 @@ class sliderPosition:
                     return
 
                 error_encoder = int(desired_position_encoder - MaxonActuator.motor_position_cts)
+                print(error_encoder)
 
                 pwm = MaxonActuator.pid_ctrl_position(error_encoder, dt)
+                print(pwm)
 
-                if (
-                    config.ankle_angle <= config.function_stiffness_to_loaded_angle_dorsiflexion(config.stiffness)
-                ) and (config.ankle_angle >= config.function_stiffness_to_loaded_angle_planarflexion(config.stiffness)):
-                    if pwm < 0.0:  # TODO: Check directionality is correct
-                        MaxonActuator.set_motor_direction_backward()
-                    else:
-                        MaxonActuator.set_motor_direction_forward()
+                
+                if pwm > 0.0:
+                    MaxonActuator.set_motor_direction_backward()
+                else:
+                    MaxonActuator.set_motor_direction_forward()
+                
+                return
 
-                    MaxonActuator.set_motor_pwm(np.abs(pwm))
+                # MaxonActuator.set_motor_pwm(np.abs(pwm))
 
-                last_time = current_time
+                # last_time = current_time
 
             except KeyboardInterrupt:
                 MaxonActuator.stop()
