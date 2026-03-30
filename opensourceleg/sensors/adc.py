@@ -9,6 +9,7 @@ from time import sleep, time
 from typing import Any, Callable, ClassVar, Optional
 
 import numpy as np
+from gpiozero import DigitalInputDevice
 
 from opensourceleg.logging import LOGGER
 from opensourceleg.sensors.base import ADCBase
@@ -294,7 +295,6 @@ class ADS114S0x(ADCBase):
     _LOW = False
 
     # Internal variables
-    _flag_nDRDY_INTERRUPT = False
     _spi = None
 
     # CRC Configuration
@@ -350,7 +350,7 @@ class ADS114S0x(ADCBase):
         self._voltage_reference = voltage_reference
         self._streaming = False
         self._data_rate = data_rate
-        self._DRDY_PIN = drdy
+        self.drdy = DigitalInputDevice(drdy, pull_up = False)
         LOGGER.info(f"ADC initialized with tag: {self._tag}")
 
 
@@ -757,6 +757,7 @@ class ADS114S0x(ADCBase):
             delay_time_us: Number of microseconds to delay
         """
         sleep(delay_time_us / 1000000.0)
+    
 
     def wait_for_drdy_htol(self, timeout_ms: int) -> bool:
         """
@@ -768,17 +769,10 @@ class ADS114S0x(ADCBase):
         Returns:
             True if nDRDY interrupt occurred before timeout, False otherwise
         """
-
-        timeout_counter = timeout_ms * 8000  # Convert to loop iterations
-
-        while not self._flag_nDRDY_INTERRUPT and timeout_counter > 0:
-            timeout_counter -= 1
-
-        if timeout_counter == 0:
-            return False
-        else:
-            self._flag_nDRDY_INTERRUPT = False  # Reset flag
-            return True
+        timeout_s = timeout_ms / 1000.0
+        success = self.drdy.wait_for_active(timeout=timeout_s)
+        
+        return bool(success)
 
     def send_start(self) -> None:
         """

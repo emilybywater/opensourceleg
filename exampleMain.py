@@ -36,7 +36,7 @@ import traceback
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 trialNumber = '1'
 subjIDCode = 'trial'
-FREQUENCY = 6000 # in Hz
+FREQUENCY = 200 # in Hz
 OFFLINE = False 
 
 # set up logging configurables  

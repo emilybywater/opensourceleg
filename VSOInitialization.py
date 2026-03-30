@@ -68,6 +68,7 @@ class VSOInitialization:
 
         actuator = next(iter(self.vso.actuators.values())) # just sees which actuators are connected
         encoder_counter = self.vso.sensors["motor_encoder"]
+
         ankle_sensor = self.vso.sensors["ankle_encoder"]
         adc = self.vso.sensors["adc"]
 
@@ -115,7 +116,7 @@ class VSOInitialization:
         actuator.position_control_init()
         actuator.position_control_config(scale_perc=scale_perc)
 
-        sliderPosition.slider_position(actuator, desired_position_perc=99.5)
+        # sliderPosition.slider_position(actuator, desired_position_perc=99.5)
 
         # Step 3: Ankle encoder offset calibration at 100% stiffness
         LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
