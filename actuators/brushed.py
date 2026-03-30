@@ -1,0 +1,437 @@
+import time
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
+
+import numpy as np
+from gpiozero import Motor, PWMOutputDevice
+from gpiozero.pins.lgpio import LGPIOFactory
+
+from opensourceleg.actuators.base import (
+    CONTROL_MODE_CONFIGS,
+    ActuatorBase,
+    ControlModeConfig,
+    CONTROL_MODES
+)
+from opensourceleg.logging import LOGGER
+
+# Maxon x VNH7070AY specifications
+MAXON_MODELS: dict[str, dict[str, Any]] = {
+    "B7E883374A15": {
+        "Curr_min": None,  # A
+        "Curr_max": None,  # A
+        "GEAR_RATIO": 6.6,
+    },
+}
+
+
+@dataclass
+class BrushedMotorState:
+    """Motor state data structure"""
+
+    position: float = 0.0  # degrees
+    velocity: float = 0.0  # RPM
+    current: float = 0.0  # milliamps
+    temperature: float = 0.0  # celsius
+    error: int = 0
+
+
+# Simplified unit conversion functions
+def degrees_to_radians(degrees: float) -> float:
+    """Convert degrees to radians"""
+    return degrees * np.pi / 180.0
+
+
+def radians_to_degrees(radians: float) -> float:
+    """Convert radians to degrees"""
+    return radians * 180.0 / np.pi
+
+
+def _maxon_position_mode_entry(maxon_actuator: "MaxonActuator") -> None:
+    LOGGER.debug(msg=f"[{maxon_actuator.tag}]  Entering Position control mode.")
+
+
+def _maxon_position_mode_exit(maxon_actuator: "MaxonActuator") -> None:
+    LOGGER.debug(msg=f"[{maxon_actuator.tag}]  Exiting Position control mode.")
+    maxon_actuator.stop()
+
+MAXON_CONTROL_MODE_CONFIGS = CONTROL_MODE_CONFIGS(
+    POSITION=ControlModeConfig(
+        entry_callback=_maxon_position_mode_entry,
+        exit_callback=_maxon_position_mode_exit,
+        has_gains=False,
+        max_gains=None,
+    ),
+    CURRENT=None,  # CURRENT mode not supported.
+    VELOCITY=None,  # VELOCITY mode not supported.
+    IDLE=None,  # IDLE mode not supported
+    IMPEDANCE=None,  # IMPEDANCE mode not supported
+    VOLTAGE=None,  # VOLTAGE mode not supported
+)
+
+
+class MaxonActuator(ActuatorBase):
+    """
+    Class for brushed motors
+    (Designed for Maxon motor paired with VNH7070AY driver).
+    """
+
+    def __init__(
+        self,
+        enable_pin: int = 12,
+        ina_pin: int = 24,
+        inb_pin: int = 25,
+        gear_ratio: float = 6.6,
+        frequency: float = 6000,
+        offline: bool = False,
+        pwm_maximum_command: float = 0.85,
+        pwm_minimum_command: float = 0.07,
+        pwm_lower_limit: float = 0.02,
+        tag: str = "maxon_actuator",
+        motor_constants = None,
+    ) -> None:
+        """
+        Initialize Maxon motor.
+        """
+        super().__init__(
+            gear_ratio=gear_ratio,
+            offline=offline,
+            tag=tag,
+            motor_constants=motor_constants,
+            frequency = frequency,
+        )
+
+        self.enable_pin = enable_pin
+        self.ina_pin = ina_pin
+        self.inb_pin = inb_pin
+
+        self.pwm_maximum_command = pwm_maximum_command
+        self.pwm_minimum_command = pwm_minimum_command
+        self.pwm_lower_limit = pwm_lower_limit
+
+        if not self._is_offline:
+            self._factory = LGPIOFactory()
+        
+            self.speed_control = PWMOutputDevice(
+                enable_pin, 
+                pin_factory=self._factory, 
+                frequency=self.frequency
+            )
+            self.direction = Motor(forward=ina_pin, backward=inb_pin)
+            LOGGER.info("Initialized Maxon x VNH7070AY.")
+        else:
+            LOGGER.info("Called brushed motor initialization in offline mode.")
+
+    @property
+    def _CONTROL_MODE_CONFIGS(self) -> CONTROL_MODE_CONFIGS:
+        return MAXON_CONTROL_MODE_CONFIGS
+
+    def start(self) -> None:
+        """
+        Not supported.
+        """
+        pass
+
+    def stop(self) -> None:
+        """Stops the motor."""
+        
+        self.speed_control.value = 0
+        self.direction.stop()
+
+    def update(self) -> None:
+        """Updates the actuator's data with encoder counter reading."""
+        if self.encoder_counter:
+            self.motor_position_cts = self.encoder_counter.count
+        else:
+            self.motor_position_cts = None
+        self.motor_position_mm = self.cts_to_mm(self.motor_position_cts)
+        self.motor_position_perc = self.cts_to_perc(self.motor_position_cts)
+
+    def set_motor_impedance(self) -> None:
+        """Set the motor impedance. Not yet supported by this library."""
+        raise NotImplementedError("Set motor impedance not implemented. Motor should be controlled by position or pwm.")
+
+    def set_motor_voltage(self) -> None:
+        """Set the motor voltage. Not yet supported by this library."""
+        raise NotImplementedError("Set motor voltage not implemented. Control the motor by setting PWM.")
+
+    def set_motor_current(self) -> None:
+        """Set the motor current. Not yet supported by this library."""
+        raise NotImplementedError("Set motor current not implemented. Control the motor by setting PWM.")
+
+    def set_motor_position(self) -> None:
+        """Set the motor position. Not yet supported by this library."""
+        raise NotImplementedError("Set motor position not implemented. Control the motor by setting PWM.")
+
+    def set_motor_torque(self) -> None:
+        """Set the motor torque. Not yet supported by this library."""
+        raise NotImplementedError("Set motor torque not implemented. Control the motor by setting PWM.")
+
+    def set_output_torque(self) -> None:
+        """Set the output torque. Not yet supported by this library."""
+        raise NotImplementedError("Set output torque not implemented. Control the motor by setting PWM.")
+
+    def set_output_impedance(self) -> None:
+        """Set the output impedance. Not yet supported by this library."""
+        raise NotImplementedError("Set output impedance not implemented. Control the motor by setting PWM.")
+
+    def set_impedance_gains(self) -> None:
+        """Set impedance control gains. Not yet supported by this library."""
+        raise NotImplementedError("Set impedance gains not implemented. Motor should be controlled by position or pwm.")
+        
+    def set_current_gains(self) -> None:
+        """Set current control gains. Not yet supported by this library."""
+        raise NotImplementedError("Set current gains not implemented. Motor should be controlled by position or pwm.")
+
+    def set_position_gains(self, K_p: float = 0.015, K_i: float = 2, K_d: float = 0.0001) -> None:
+        """Set position control gains."""
+        self.K_p = K_p  # Proportional gain
+        self.K_i = K_i  # Integral gain
+        self.K_d = K_d  # Derivative gain
+
+    def _set_impedance_gains(self) -> None:
+        """Set impedance control gains. Not yet supported by this library."""
+        raise NotImplementedError("Set impedance gains not implemented. Motor should be controlled by position or pwm.")
+
+    def home(
+        self,
+        homing_pwm: float = 0.25,
+        sample_rate: float = 0.05,
+        position_threshold: int = 200,
+        home_zero: bool = True,
+        callback: Optional[Callable] = None,
+    ) -> None:
+        """
+        This method homes the actuator and the corresponding joint by moving it to the zero position.
+        The zero position is defined as the position of zero percent stiffness (VSO).
+        """
+        time.sleep(1)
+        keep_going = True
+
+        if home_zero:
+            LOGGER.info("Homing to zero position (0% stiffness).")
+            self.set_motor_direction_backward()
+            time.sleep(0.5)  # Ensure direction is set before applying PWM
+        else:
+            LOGGER.info("Homing to hard stop (100% stiffness).")
+            self.set_motor_direction_forward()
+            time.sleep(0.5)  # Ensure direction is set before applying PWM
+
+        self.set_motor_pwm(homing_pwm)
+        
+
+        while keep_going:
+            self.update()
+            last_position = self.motor_position_cts
+            time.sleep(sample_rate)
+
+            self.update()
+            error = self.motor_position_cts - last_position
+            if -position_threshold <= error <= position_threshold:
+                self.stop()
+                keep_going = False
+
+        # --- CALLBACK EXECUTION ---
+        if callback is not None:
+            callback()  # This executes the function passed in
+    
+    @property
+    def motor_encoder_position_perc(self) -> float:
+        """Motor encoder position as a percentage of the full range of motion for the motor in one direction."""
+        self.update()
+        return self.motor_position_perc
+
+    @property
+    def motor_position(self) -> float:
+        """Motor position properties"""
+        self.update()
+        return self.motor_position_cts, self.motor_position_mm, self.motor_position_perc
+
+    @property
+    def motor_velocity(self) -> float:
+        """Motor velocity (radians / second) - not supported."""
+        LOGGER.warning("Motor velocity reading is not available.")
+        return 0.0
+
+    @property
+    def motor_voltage(self) -> float:
+        """Motor voltage (V) - not supported."""
+        LOGGER.warning("Motor voltage reading is not available.")
+        return 0.0
+
+    @property
+    def motor_current(self) -> float:
+        """Motor current (A)."""
+        raise NotImplementedError("Motor current reading is not available.")
+
+    @property
+    def motor_torque(self) -> float:
+        """Motor torque (Nm) - not supported."""
+        LOGGER.warning("Motor torque reading is not available.")
+        return 0.0
+
+    @property
+    def case_temperature(self) -> float:
+        """
+        The VNH7070AY has thermal shutdown protection, but it does not provide a real-time temperature
+        without an external sensor.
+        """
+        LOGGER.warning("No temperature reading available for the motor casing.")
+        return 0.0
+
+    @property
+    def winding_temperature(self) -> float:
+        """
+        The VNH7070AY has thermal shutdown protection, but it does not provide a real-time temperature
+        without an external sensor.
+        """
+        LOGGER.warning("No temperature reading available for the motor windings.")
+        return 0.0
+
+    def perc_to_cts(self, percentage: float) -> float:
+        """
+        Convert a percentage of full range of motion for the motor in one direction
+        to encoder counts.
+        """
+        return percentage * self.scale_perc
+
+    def cts_to_perc(self, counts: int) -> float:
+        """
+        Convert a percentage of full range of motion for the motor in one direction
+        to encoder counts.
+        """
+        return counts / self.scale_perc
+
+    def mm_to_cts(self, mm: float) -> int:
+        """
+        Convert a number of encoder counts to a number of mm moved assuming a
+        rotary to linear transmission like a lead screw.
+        """
+        return mm * self.scale
+
+    def cts_to_mm(self, counts: int) -> float:
+        """
+        Convert a number of encoder counts to a number of mm moved assuming a
+        rotary to linear transmission like a lead screw.
+        """
+        return counts / self.scale
+
+    def position_control_init(self, K_p: float = 0.015, K_i: float = 2, K_d: float = 0.0001) -> None:
+        """Initialize Position Control"""
+        self.set_position_gains(K_p, K_i, K_d)
+        self.error_encoder_last = 0.0
+        self.d_term_last = 0.0
+        self.d_term_filtered_last = 0.0
+        self.i_term = 0.0
+        self.last_pwm = 0.0
+
+    def position_control_config(
+        self,
+        scale_perc: float = 19972.65,
+        scale: float = 21281.976,
+        min_pos_error: float = 0.3,
+        slider_max_perc: float = 99.5,
+        slider_min_perc: float = 0.5,
+        allowable_coupler_drift: float = -0.2,
+        time_limit: float =15.0,
+    ) -> None:
+        """
+        Designed for the Variable Stiffness Orthosis
+
+        scale_perc: encoder counts to 1% of full range of motion for the motor in one direction
+        scale: encoder conversion scale (counts to mm)
+        min_error: Minimum desired change in slider position that will result in a motor command
+        slider_max_perc: [%] This is set slightly below 100% so that the spring support does not hit the hard stop.
+        slider_min_perc: [%] This is set slightly above 0% so that the spring support does not hit the coupler.
+        time_limit: [sec] maximum time for position control loop to execute (safety).
+        After this time, the PWM will be set to zero, and the code assumes that the slider is jammed.
+        """
+        self.scale_perc = scale_perc
+        self.scale = scale
+        self.min_error = min_pos_error
+        self.slider_max_perc = slider_max_perc
+        self.slider_min_perc = slider_min_perc
+        self.allowable_coupler_drift = allowable_coupler_drift
+        self.time_limit = time_limit
+
+        self.slider_min_counts = self.slider_min_perc * self.scale_perc
+        self.slider_max_counts = self.slider_max_perc * self.scale_perc
+
+        self.slider_min_mm = self.slider_min_counts / self.scale
+        self.slider_max_mm = self.slider_max_counts / self.scale
+
+    def lpfilter1(
+        self, x, y_past
+    ):  # Used to low-pass filter the derivative term in the PID control of the VSO spring support.
+        a1 = [1, -0.509525449494429]
+        b1 = [0.245237275252786, 0.245237275252786]
+        "send it last 1 filtered points and last 2 unfiltered points"
+        y = -(a1[1] * y_past[0]) + b1[0] * x[0] + b1[1] * x[1]
+        return y
+
+    def pid_ctrl_position(self, error_encoder, dt) -> float:
+        """
+        Set the motor position with respect to a percentage (0-100) of the full range of motion for the
+        motor in one direction.
+        """
+        p_term = self.K_p * error_encoder
+
+        error_derivative = (error_encoder - self.error_encoder_last) / dt
+        self.error_encoder_last = error_encoder
+        d_term = error_derivative * self.K_d
+        d_term_filtered = self.lpfilter1([self.d_term_last, d_term], [self.d_term_filtered_last])
+        self.d_term_last = d_term
+        self.d_term_filtered_last = d_term_filtered
+
+        # only integrate when not saturated (prevent windup)
+        if -(self.pwm_maximum_command - 5) < self.last_pwm < (self.pwm_maximum_command - 5):
+            self.i_term = self.i_term + (self.K_i * error_encoder * dt)
+
+        # Set PWM frequency
+        pwm_feedback = int(p_term + self.i_term + d_term_filtered) / 100
+        self.last_pwm = pwm_feedback
+
+        return pwm_feedback
+
+    def check_coupler_drift(self) -> None:
+        if self.allowable_coupler_drift < self.motor_position_mm < 0:
+            LOGGER.warning("Coupler has drifted a little, but probably not an issue yet")
+            LOGGER.info(f"motor_position_mm: {self.motor_position_mm:.4f}")
+
+        if self.motor_position_mm <= self.allowable_coupler_drift:
+            LOGGER.warning(
+                "Coupler has been pushed back towards the motor and should be reassembled. "
+                "Coupler should be flush with the lead screw, as far away from motor as "
+                "possible for accurate stiffness reports."
+            )
+            LOGGER.info(f"motor_position_mm: {self.motor_position_mm:.4f}")
+
+    def set_motor_direction_forward(self) -> None:
+        """Set the motor direction to be forwards."""
+        self.direction.forward()
+
+    def set_motor_direction_backward(self) -> None:
+        """Set the motor direction to be backwards."""
+        self.direction.backward()
+
+    def set_motor_pwm(self, pwm: float) -> None:
+        """Set the motor pwm rate."""
+        if pwm > self.pwm_maximum_command:
+            LOGGER.info('PWM command above maximum. Setting to maximum.')
+            pwm = self.pwm_maximum_command
+        elif pwm < self.pwm_minimum_command and pwm >= self.pwm_lower_limit:
+            LOGGER.info('PWM command below minimum. Setting to minimum.')
+            pwm = self.pwm_minimum_command
+        elif pwm < self.pwm_lower_limit:
+            LOGGER.info('PWM command below lower limit. Setting to zero.')
+            pwm = 0.0
+
+        self.speed_control.value = pwm
+
+    def set_motor_encoder(self, encoder_counter) -> None:
+        """Set the motor encoder counter."""
+        self.encoder_counter = encoder_counter
+
+
+
+if __name__ == "__main__":
+    pass

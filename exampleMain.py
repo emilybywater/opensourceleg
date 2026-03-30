@@ -4,8 +4,6 @@ exampleMAIN.py
 An example of the MAIN.py script that may be called and created for projects using the VSO/VSPA.
 Note: You must have opensourceleg library and opensourceleg[vso] package installed. 
 
-As of now there are several dependencies that are missing in this. 
-
 Anushka Rathi
 03/02/2025
 
@@ -62,7 +60,7 @@ def controller_main():
                 "adc": ADS114S0x(offline = OFFLINE, tag = "adc", data_rate=1000, drdy=16),
                 "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
                                           A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
-                "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
+                # "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
                 # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =5),
             },
         )
@@ -95,7 +93,7 @@ def controller_main():
 
         LOGGER.info("Starting VSO initialization sequence...")
         init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
-        init.run(run_calibration=False)  # if not disassembled !
+        init.run(run_calibration=True)  # if not disassembled !
 
 
         # input('\nPress any key to begin walking:') 
@@ -106,7 +104,7 @@ def controller_main():
         #     profiler.tic() # start the profiler timing 
             
         #     vso.update()
-        #     vso.sensors["ankle_encoder"].position - self.load_calib_offset()
+        #     vso.sensors["ankle_encoder"].position - init.load_calib_offset()
         #     datalog.update() # update values into the datalog  
         #     datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
