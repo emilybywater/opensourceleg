@@ -63,6 +63,7 @@ class LS7366R(EncoderCounterBase):
         CLK: int = 1000000,
         BTMD: int = 4,
         max_val: int = 4294967295, # for four byte mode, only correct for four byte mode
+        spi_bus: int= 0,
         offline: bool = False,
         tag: str = "encoder_counter",
     ) -> None:
@@ -73,7 +74,7 @@ class LS7366R(EncoderCounterBase):
         self.max_val = max_val  # Maximum value for the counter, used for signed count conversion
 
         self.spi = spidev.SpiDev()  # Initialize object
-        self.spi.open(0, CSX)  # Which CS line will be used
+        self.spi.open(spi_bus, CSX)  # Which CS line will be used
         self.spi.max_speed_hz = CLK  # Speed of clk (modifies speed transaction)
 
         # Init the Encoder
@@ -90,7 +91,10 @@ class LS7366R(EncoderCounterBase):
 
     def close(self):
         LOGGER.info("Closing Encoder...")
+        self.clearCounter()
+        self.clearStatus()
         self.spi.close()
+        self.spi = None
 
     def clearCounter(self):
         self.spi.xfer2([self.CLEAR_COUNTER])
@@ -132,7 +136,8 @@ class LS7366R(EncoderCounterBase):
 
     def stop(self) -> None:
         """Not yet supported by this library."""
-        pass
+        self.close()
+        LOGGER.info('Motor encoder stopped successfully.')
 
     def update(self) -> None:
         """Not yet supported by this library."""

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 import numpy as np
-from gpiozero import Motor, PWMOutputDevice
+from gpiozero import Motor, PWMOutputDevice, OutputDevice
 from gpiozero.pins.lgpio import LGPIOFactory
 
 from opensourceleg.actuators.base import (
@@ -111,12 +111,15 @@ class MaxonActuator(ActuatorBase):
         if not self._is_offline:
             self._factory = LGPIOFactory()
         
-            self.speed_control = PWMOutputDevice(
-                enable_pin, 
-                pin_factory=self._factory, 
-                frequency=self.frequency
-            )
-            self.direction = Motor(forward=ina_pin, backward=inb_pin)
+            # self.speed_control = PWMOutputDevice(
+            #     enable_pin, 
+            #     pin_factory=self._factory, 
+            #     frequency=self.frequency
+            # )
+            # self.direction = Motor(forward=ina_pin, backward=inb_pin)
+            self.speed_control = PWMOutputDevice(self.enable_pin, frequency=8000, initial_value=0)
+            self.inb = OutputDevice(self.inb_pin, initial_value=False)
+            self.ina = OutputDevice(self.ina_pin, initial_value=False)
             LOGGER.info("Initialized Maxon x VNH7070AY.")
         else:
             LOGGER.info("Called brushed motor initialization in offline mode.")
@@ -135,7 +138,9 @@ class MaxonActuator(ActuatorBase):
         """Stops the motor."""
         
         self.speed_control.value = 0
-        self.direction.stop()
+        # self.direction.stop()
+        self.ina.off()
+        self.inb.off()
 
     def update(self) -> None:
         """Updates the actuator's data with encoder counter reading."""
@@ -407,11 +412,15 @@ class MaxonActuator(ActuatorBase):
 
     def set_motor_direction_forward(self) -> None:
         """Set the motor direction to be forwards."""
-        self.direction.forward()
+        # self.direction.forward()
+        self.ina.on()
+        self.inb.off()
 
     def set_motor_direction_backward(self) -> None:
         """Set the motor direction to be backwards."""
-        self.direction.backward()
+        # self.direction.backward()
+        self.ina.off()
+        self.inb.on()
 
     def set_motor_pwm(self, pwm: float) -> None:
         """Set the motor pwm rate."""
