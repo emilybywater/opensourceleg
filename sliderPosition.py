@@ -18,9 +18,9 @@ class sliderPosition:
         desired_position_encoder = MaxonActuator.perc_to_cts(desired_position_perc)
         desired_position_mm = MaxonActuator.cts_to_mm(desired_position_encoder)
 
+        # start_time = time.time()
         start_time = time.time()
         last_time = start_time
-        current_time = start_time
 
         while True:
             try:
@@ -50,6 +50,9 @@ class sliderPosition:
                 dt = current_time - last_time
                 t_elapsed = current_time - start_time
 
+                if dt <= 0.0:
+                    dt = 1e-6  # Prevent division by zero, though this should rarely happen
+
                 if t_elapsed > MaxonActuator.time_limit:
                     LOGGER.warning("Slider may be jammed - please check prototype (pwm set to zero for safety)")
                     MaxonActuator.stop()
@@ -58,20 +61,20 @@ class sliderPosition:
                 error_encoder = int(desired_position_encoder - MaxonActuator.motor_position_cts)
 
                 pwm = MaxonActuator.pid_ctrl_position(error_encoder, dt)
-
                 
-                if pwm > 0.0:
+                if pwm < 0.0:
                     MaxonActuator.set_motor_direction_backward()
-                else:
+                elif pwm > 0.0:
                     MaxonActuator.set_motor_direction_forward()
-                
-                return
+                else:
+                    MaxonActuator.stop()
+                    return True
+            
+                MaxonActuator.set_motor_pwm(np.abs(pwm))
 
-                # MaxonActuator.set_motor_pwm(np.abs(pwm))
-
-                # last_time = current_time
-
+                last_time = current_time
+                time.sleep(0.01)
             except KeyboardInterrupt:
                 MaxonActuator.stop()
-                LOGGER.warning("KeyboardInterrupt")
+                LOGGER.warning("KeyboardInterrupt during slider motion.")
                 break
