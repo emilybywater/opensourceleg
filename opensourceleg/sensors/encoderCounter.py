@@ -44,7 +44,7 @@ class LS7366R(EncoderCounterBase):
     # 0x02: x2 quadrature count mode (two counts per quadrature cycle).
     # 0x03: x4 quadrature count mode (four counts per quadrature cycle).
 
-    QUADRATURE_COUNT_MODE = 0x00
+    QUADRATURE_COUNT_MODE = 0x03 # originally was 0x00
 
     class CounterConfig:
         FOURBYTE_COUNTER: Final = 0x00

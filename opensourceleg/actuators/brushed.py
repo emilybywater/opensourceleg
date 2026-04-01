@@ -204,6 +204,7 @@ class MaxonActuator(ActuatorBase):
         position_threshold: int = 200,
         home_zero: bool = True,
         callback: Optional[Callable] = None,
+        timeout_s: float = 8.0,
     ) -> None:
         """
         This method homes the actuator and the corresponding joint by moving it to the zero position.
@@ -231,6 +232,9 @@ class MaxonActuator(ActuatorBase):
 
             self.update()
             error = self.motor_position_cts - last_position
+            # LOGGER.info(
+            # f"home loop: last={last_position}, now={self.motor_position_cts}, delta={error}"
+            # )
             if -position_threshold <= error <= position_threshold:
                 self.stop()
                 keep_going = False

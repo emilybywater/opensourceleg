@@ -60,7 +60,7 @@ class AS5048B(EncoderBase):  # ToDo: We use AS5048B -- need to look into name ch
         self.enable_diagnostics = enable_diagnostics
 
         super().__init__(tag=tag, offline=offline)
-
+        # Change A2 and A1
         self.addr = AS5048B.I2C_BASE_ADR_7BIT | ((bool(A2_adr_pin)) << 1) | ((bool(A1_adr_pin)) << 0)
         self._reset_data()
 
