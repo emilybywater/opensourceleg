@@ -141,8 +141,8 @@ class LS7366R(EncoderCounterBase):
 
     def update(self) -> None:
         """Not yet supported by this library."""
-        raise NotImplementedError("Update not implemented.")
-
+        self.readCounter()
+        
     @property
     def count(self) -> None:
         """

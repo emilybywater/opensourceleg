@@ -71,14 +71,17 @@ class VSOInitialization:
         
         if self.vso.sensors.get("ankle_encoder", None) is not None:
             ankle_sensor = self.vso.sensors["ankle_encoder"]
+        else:
+            ankle_sensor = None
 
         if self.vso.sensors.get("adc", None) is not None:
             adc = self.vso.sensors["adc"]
             adc.adc_configure_common(single_shot=True,filter_low_latency=False)
-        
-        if self.vso.sensors.get("hallEffect_1", None) is not None:
-            adc.set_mux_single_ended(adc._ADS_P_AIN3)
-            adc.discard_settling_reads(timeout_ms=1000)
+            if self.vso.sensors.get("hallEffect_1", None) is not None:
+                adc.set_mux_single_ended(adc._ADS_P_AIN3)
+                adc.discard_settling_reads(timeout_ms=1000)
+        else:
+            adc = None
         
         time.sleep(0.05)  
 
@@ -122,13 +125,16 @@ class VSOInitialization:
 
         sliderPosition.slider_position(actuator, desired_position_perc=99.5)
 
-        # Step 3: Ankle encoder offset calibration at 100% stiffness
-        LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
-        time.sleep(2)  # Warmup period for ankle encoder to stabilize
-        ankle_sensor.update()
-        calib_offset = self.side*np.rad2deg(ankle_sensor.position)
-        self._save_calib_offset(calib_offset)
-        LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} deg")
+        if ankle_sensor is not None:
+            # Step 3: Ankle encoder offset calibration at 100% stiffness
+            LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
+            time.sleep(2)  # Warmup period for ankle encoder to stabilize
+            ankle_sensor.update()
+            calib_offset = self.side*np.rad2deg(ankle_sensor.position)
+            self._save_calib_offset(calib_offset)
+            LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} deg")
+        else:
+            LOGGER.info(f"No ankle encoder. Could not capture unloaded equilibrium angle.")
 
 
         LOGGER.info("VSO initialization complete.")

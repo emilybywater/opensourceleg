@@ -288,7 +288,7 @@ class ADS114S0x(ADCBase):
     _SPI_BUS = 1
     _SPI_DEVICE = 0
 
-    # TODO: Do the rest of the global variables in hal.py need to be added?
+    # TODO: Do the rest of the global variables in hall.py need to be added?
 
     # Constants
     _HIGH = True
@@ -402,36 +402,75 @@ class ADS114S0x(ADCBase):
         self._set_device_state(0)
         LOGGER.info("ADC stopped successfully.")
 
-    def update(self, ch, gain: Optional[int] = None) -> float:
-        """
-        High-level helper to switch to a channel and get a voltage.
+    def update(self): 
+        MAX_ATTEMPTS = 1000
+        attempts =0 
+        
+        while not self._ready_to_read(): 
+            sleep(0.001)
+            attempts += 1
+            if attempts > MAX_ATTEMPTS:
+                raise RuntimeError(
+                    "Couldn't connect to the ADC, please ensure that the device is connected and powered on."
+                )
 
-        Define ch using
-            @dataclass
-            class ChannelConfig:
-                name: str
-                ain_pos_code: int
-                ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
-                postprocess: Optional[Callable[[float], float]] = None
-                units: str = "V"
-                settle_reads: int = 1
-        """
-        # 1. Update the MUX register
-        self.set_mux_single_ended(pos_code=ch.ain_pos_code, neg_code=ch.ain_neg_code)
+        self._data = self._read_data_millivolts()
 
-        # 2. Let the signal settle (Crucial for high-impedance sensors)
-        if ch.settle_reads > 0:
-            self.discard_settling_reads(n=ch.settle_reads)
+    def _ready_to_read():
+        reply = self.read_single_register(address = self._REG_ADDR_STATUS)
+        
+        if reply & _ADS_nRDY_MASK: 
+            return False 
+        
+        return True 
+    
+    def read_data_millivolts(self): 
+        
+        self.read_multiple_registers()
+        
+        
+        
+        
+        
+        # ch: Optional[int] = None, gain: Optional[int] = None) -> float:
+        # """
+        # High-level helper to switch to a channel and get a voltage.
 
-        # 3. Trigger and Fetch
-        self.send_start()
-        code16, _ = self.wait_and_read_code16(timeout_ms=500)
+        # Define ch using
+        #     @dataclass
+        #     class ChannelConfig:
+        #         name: str
+        #         ain_pos_code: int
+        #         ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
+        #         postprocess: Optional[Callable[[float], float]] = None
+        #         units: str = "V"
+        #         settle_reads: int = 1
+        # """
+        # if ch is None:
+        #     ch = ChannelConfig(
+        #     name="default_sensor",
+        #     ain_pos_code=ADS114S0x._ADS_P_AIN0,   # provide the ADC input pin here 
+        #     ain_neg_code=ADS114S0x._ADS_N_AINCOM
+        #     )
+        
+        # if gain is None: 
+        #     gain = 1
+            
+        # # 1. Update the MUX register
+        # self.set_mux_single_ended(pos_code=ch.ain_pos_code, neg_code=ch.ain_neg_code)
 
-        volts = self.code16_to_volts(code16, self._voltage_reference, gain)
-        return volts
+        # # 2. Let the signal settle (Crucial for high-impedance sensors)
+        # if ch.settle_reads > 0:
+        #     self.discard_settling_reads(n=ch.settle_reads)
+
+        # # 3. Trigger and Fetch
+        # self.send_start()
+        # code16, _ = self.wait_and_read_code16(timeout_ms=500)
+
+        # volts = self.code16_to_volts(code16, vref_volts=self._voltage_reference, gain=gain)
+        # return volts
 
     
-
     # Properties required by SensorBase
     @property
     def is_streaming(self) -> bool:
@@ -506,13 +545,13 @@ class ADS114S0x(ADCBase):
         self._register_map[address] = data_rx[self._COMMAND_LENGTH]
         return data_rx[self._COMMAND_LENGTH]
 
-    def read_multiple_registers(self, start_address: int, count: int) -> None:
+    def read_multiple_registers(self, start_address=0x00, count=17) -> None:
         """
         Reads a group of registers starting at the specified address
         Use get_register_value() to retrieve the read values
 
         Args:
-            start_address: Register address to start reading
+            start_address: Register address to start reading (HEX)
             count: Number of registers to read
         """
         if start_address + count > self._NUM_REGISTERS:
@@ -959,7 +998,7 @@ class ADS114S0x(ADCBase):
             self.send_start()
             _ = self.wait_and_read_code16(timeout_ms=timeout_ms)
 
-    def code16_to_volts(code16: int, *, vref_volts: float, gain: int) -> float:
+    def code16_to_volts(self, code16: int, *, vref_volts: float, gain: int) -> float:
         """
         Signed 16-bit ADC code in [-32768..32767]
         Vin = code * (Vref/gain) / 32768
@@ -1044,7 +1083,7 @@ class ChannelConfig:
     """
 
     name: str
-    ain_pos_code: int
+    ain_pos_code: int= ADS114S0x._ADS_P_AIN0
     ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
     postprocess: Optional[Callable[[float], float]] = None
     units: str = "V"

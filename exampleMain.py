@@ -56,13 +56,13 @@ def controller_main():
         tag ="variableStiffessOrthosis",
         actuators={"ankle": MaxonActuator(offline = OFFLINE, tag = "ankle_actuator", motor_constants = None, frequency=10000)},
         sensors={
-                "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
-                                       A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
+                # "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
+                #                        A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
                 "motor_encoder": LS7366R(offline = OFFLINE, tag = "encoder_counter_motor", spi_bus=0),
                 "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=1000,drdy=16),
                 
-                # "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =5),
-                # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =5),
+                "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
+                # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =3.3),
             },
         )
     vso.actuators["ankle"].set_motor_encoder(vso.sensors["motor_encoder"])
@@ -80,11 +80,12 @@ def controller_main():
 
     LOGGER.info("Started clock...")
 
+    position = 0 
     # track specific information using track function in datalog 
     datalog.track_function(elapsed_time, name="time")
     datalog.track_function(lambda: vso.actuators["ankle"].motor_encoder_position_perc, name="motorEncoderPosPerc")
-    datalog.track_function(lambda: np.rad2deg(vso.sensors["ankle_encoder"].position), name="ankleEncoderPos")
-    # datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
+    # datalog.track_function(lambda: np.rad2deg(position), name="ankleEncoderPos")
+    datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
     # datalog.track_function(lambda: vso.sensors["hallEffect_2"].voltage, name="hallEffect_2_voltage") # mV
     
     LOGGER.info("Finished setting up datalogger...")
@@ -93,21 +94,21 @@ def controller_main():
         vso.actuators["ankle"].set_control_mode(CONTROL_MODES.POSITION)
 
         LOGGER.info("Starting VSO initialization sequence...")
-        init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
-        init.run(run_calibration=False)  # if not disassembled !
+        # init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
+        # init.run(run_calibration=False)  # if not disassembled !
 
 
-        # input('\nPress any key to begin walking:') 
-        # vso.update() # call an update of the robot
-        # loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
+        input('\nPress any key to begin walking:') 
+        vso.update() # call an update of the robot
+        loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
         
-        # for t in loop:
+        for t in loop:
         #     profiler.tic() # start the profiler timing 
             
-        #     vso.update()
-        #     vso.sensors["ankle_encoder"].position - init.load_calib_offset()
-        #     datalog.update() # update values into the datalog  
-        #     datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
+            vso.update()
+            # position = vso.sensors["ankle_encoder"].position - init.load_calib_offset()
+            datalog.update() # update values into the datalog  
+            datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
         #     profiler.toc() # end the profiler timing 
 
