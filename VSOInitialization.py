@@ -85,7 +85,7 @@ class VSOInitialization:
 
         if self.vso.sensors.get("adc", None) is not None:
             adc = self.vso.sensors["adc"]
-            adc.adc_configure_common(single_shot=True,filter_low_latency=False)
+            adc.adc_configure_common(single_shot=False,filter_low_latency=False)
             
             if self.vso.sensors.get("hallEffect_1", None) is not None:
                 hall1 = self.vso.sensors.get("hallEffect_1")

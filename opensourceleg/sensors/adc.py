@@ -361,6 +361,7 @@ class ADS114S0x(ADCBase):
         """
         Start the ADC by opening the SPI port, resetting the device, and confirming reading and writing
         """
+
         LOGGER.info("Starting ADC...")
         self.init_spi()
 
@@ -456,6 +457,7 @@ class ADS114S0x(ADCBase):
             row = None
             LOGGER.info("No channels have been configured for reading. Use ChannelConfig.")
 
+        print(row)
         return row
 
     # Properties required by SensorBase
