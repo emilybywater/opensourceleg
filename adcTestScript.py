@@ -1,14 +1,10 @@
 """"
-exampleMAIN.py
+adcTestScript.py
 
-An example of the MAIN.py script that may be called and created for projects using the VSO/VSPA.
 Note: You must have opensourceleg library and opensourceleg[vso] package installed. 
 
-Anushka Rathi
-03/02/2025
-
 Emily Bywater
-03/25/2025
+04/06/2025
 """
 
 import numpy as np
@@ -54,20 +50,15 @@ def controller_main():
     # define the "VSO" robot 
     vso = VSO[MaxonActuator, SensorBase](
         tag ="variableStiffessOrthosis",
-        actuators={"ankle": MaxonActuator(offline = OFFLINE, tag = "ankle_actuator", motor_constants = None, frequency=10000)},
+        actuators={},
         sensors={
-                "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
-                                       A2_adr_pin=True, zero_position=0, enable_diagnostics=False),
-                "motor_encoder": LS7366R(offline = OFFLINE, tag = "encoder_counter_motor", spi_bus=0),
-                # "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=1000,drdy=16),
+                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=1000,drdy=16),
                 
-                #"hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
+                "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
                 # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =3.3),
             },
         )
-    vso.actuators["ankle"].set_motor_encoder(vso.sensors["motor_encoder"])
-    vso.actuators["ankle"].position_control_config() # set the scale percentage for the position control (stiffness)
-
+    
     LOGGER.info("Finished setting up VSO...")
 
     profiler = Profiler("ouput_run")
@@ -83,16 +74,14 @@ def controller_main():
     position = 0 
     # track specific information using track function in datalog 
     datalog.track_function(elapsed_time, name="time")
-    datalog.track_function(lambda: vso.actuators["ankle"].motor_encoder_position_perc, name="motorEncoderPosPerc")
-   # datalog.track_function(lambda: np.rad2deg(position), name="ankleEncoderPos")
+    
     # datalog.track_function(lambda: vso.sensors["hallEffect_1"].voltage, name="hallEffect_1_voltage") # mV
     # datalog.track_function(lambda: vso.sensors["hallEffect_2"].voltage, name="hallEffect_2_voltage") # mV
     
     LOGGER.info("Finished setting up datalogger...")
     
     with vso, datalog:
-        vso.actuators["ankle"].set_control_mode(CONTROL_MODES.POSITION)
-
+        
         LOGGER.info("Starting VSO initialization sequence...")
         init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
         init.run(run_calibration=False)  # if not disassembled !

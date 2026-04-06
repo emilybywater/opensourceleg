@@ -350,7 +350,8 @@ class ADS114S0x(ADCBase):
         self._voltage_reference = voltage_reference
         self._streaming = False
         self._data_rate = data_rate
-        self.drdy = DigitalInputDevice(drdy, pull_up = False)
+        self._drdy = DigitalInputDevice(drdy, pull_up = False)
+        self._channels: Dict[str, ChannelConfig] = {}
         LOGGER.info(f"ADC initialized with tag: {self._tag}")
 
 
@@ -403,10 +404,15 @@ class ADS114S0x(ADCBase):
         LOGGER.info("ADC stopped successfully.")
 
     def update(self): 
+        """
+        Update the ADC data by reading the latest voltage values in millivolts.
+        Attempts to read a maximum of 1000 times before throwing an error.
+        """
+
         MAX_ATTEMPTS = 1000
         attempts =0 
         
-        while not self._ready_to_read(): 
+        while self._ready_to_read() is False: 
             sleep(0.001)
             attempts += 1
             if attempts > MAX_ATTEMPTS:
@@ -416,61 +422,41 @@ class ADS114S0x(ADCBase):
 
         self._data = self._read_data_millivolts()
 
-    def _ready_to_read():
+    def _ready_to_read(self):
+        """
+        Check if all ADC channels are ready for a new data read.
+
+        Returns:
+            bool: True if the status register indicates readiness; otherwise, False.
+        """
+
         reply = self.read_single_register(address = self._REG_ADDR_STATUS)
         
-        if reply & _ADS_nRDY_MASK: 
-            return False 
+        if reply & self._ADS_nRDY_MASK: 
+            return False
         
-        return True 
+        return True
     
-    def read_data_millivolts(self): 
-        
-        self.read_multiple_registers()
-        
-        
-        
-        
-        
-        # ch: Optional[int] = None, gain: Optional[int] = None) -> float:
-        # """
-        # High-level helper to switch to a channel and get a voltage.
+    def _read_data_millivolts(self): 
+        """Returns channel readings in millivolts."""
+        if self._channels:
+            for ch in self._channels.values():
+                self.set_mux_single_ended(ch.ain_pos_code)
+                self.discard_settling_reads(timeout_ms=1000)
+                self.send_start()
+                code16, status = self.wait_and_read_code16()
+                
 
-        # Define ch using
-        #     @dataclass
-        #     class ChannelConfig:
-        #         name: str
-        #         ain_pos_code: int
-        #         ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
-        #         postprocess: Optional[Callable[[float], float]] = None
-        #         units: str = "V"
-        #         settle_reads: int = 1
-        # """
-        # if ch is None:
-        #     ch = ChannelConfig(
-        #     name="default_sensor",
-        #     ain_pos_code=ADS114S0x._ADS_P_AIN0,   # provide the ADC input pin here 
-        #     ain_neg_code=ADS114S0x._ADS_N_AINCOM
-        #     )
-        
-        # if gain is None: 
-        #     gain = 1
+
             
-        # # 1. Update the MUX register
-        # self.set_mux_single_ended(pos_code=ch.ain_pos_code, neg_code=ch.ain_neg_code)
 
-        # # 2. Let the signal settle (Crucial for high-impedance sensors)
-        # if ch.settle_reads > 0:
-        #     self.discard_settling_reads(n=ch.settle_reads)
 
-        # # 3. Trigger and Fetch
-        # self.send_start()
-        # code16, _ = self.wait_and_read_code16(timeout_ms=500)
+                
+                    
+        else:
+            LOGGER.info("No channels have been configured for reading. Use ChannelConfig.")
 
-        # volts = self.code16_to_volts(code16, vref_volts=self._voltage_reference, gain=gain)
-        # return volts
-
-    
+        
     # Properties required by SensorBase
     @property
     def is_streaming(self) -> bool:
@@ -809,7 +795,7 @@ class ADS114S0x(ADCBase):
             True if nDRDY interrupt occurred before timeout, False otherwise
         """
         timeout_s = timeout_ms / 1000.0
-        success = self.drdy.wait_for_active(timeout=timeout_s)
+        success = self._drdy.wait_for_active(timeout=timeout_s)
         
         return bool(success)
 
@@ -1087,7 +1073,6 @@ class ChannelConfig:
     ain_neg_code: int = ADS114S0x._ADS_N_AINCOM
     postprocess: Optional[Callable[[float], float]] = None
     units: str = "V"
-    settle_reads: int = 1
 
 
 class ADS131M0x(ADCBase):

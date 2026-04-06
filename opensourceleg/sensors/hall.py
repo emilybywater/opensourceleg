@@ -1,6 +1,6 @@
 """Module for using the DRV5056 family of Hall effect sensors."""
 
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from opensourceleg.logging import LOGGER
 from opensourceleg.sensors.base import HallBase
@@ -86,6 +86,7 @@ class DRV5056(HallBase):
         sensor_num: str = "A1",
         t_a: int = 23,
         supply_voltage: float = 5,
+        sens_v_per_mT: Optional[float] = None
     ):
         """
         Initialize the DRV5056 instance.
@@ -106,6 +107,7 @@ class DRV5056(HallBase):
         self._sensor_num = sensor_num
         self._t_a = t_a
         self._supply_voltage = supply_voltage
+        self._sens_v_per_mT = sens_v_per_mT
 
     def __repr__(self) -> str:
         return "DRV5056"
@@ -139,6 +141,12 @@ class DRV5056(HallBase):
                 self._sensitivity = self.lower_volt_sensitivity * self._supply_voltage / self._DRV_VCC_3_3
             else:
                 raise ValueError("Supply voltage out of range.")
+        elif self._supply_voltage == self._DRV_VCC_3_3:
+            self.range = self.lower_volt_range
+            self._sensitivity = self.lower_volt_sensitivity
+        elif self._supply_voltage == self.DRV_VCC_5:
+            self.range = self.base_range
+            self._sensitivity = self.base_sensitivity
 
     def start(self) -> None:
         self._streaming = True
@@ -146,15 +154,22 @@ class DRV5056(HallBase):
     def stop(self) -> None:
         self._streaming = False
 
-    def update(self, voltage) -> None:
+    def update(self) -> None:
         """Calculate the estimated magnetic response."""
-        self.field_strength = (voltage * self._V_TO_MV - self._QUIESCENT_OFFSET) / (
+        self.field_strength = (self.voltage * self._V_TO_MV - self._QUIESCENT_OFFSET) / (
             self._sensitivity * (1 + (self._s_tc * (self._t_a - 25)))
         )
         if self.range == self.field_strength:
             LOGGER.error("Careful. The sensor may be out of range and your magnetic field may be higher.")
         
         return self.field_strength
+
+    def drv5056_field_mT(self, volts: float, vcc: float) -> float:
+        """
+        Estimate magnetic field if sensitivity is known.
+        Many DRV5056 parts are ratiometric: Vout ~ Vcc/2 at 0 field.
+        """
+        return (volts - (vcc / 2.0)) / self._sens_v_per_mT
 
     @property
     def is_streaming(self) -> bool:
@@ -174,7 +189,7 @@ class DRV5056(HallBase):
         Returns:
             float: Voltage reading from the sensor.
         """
-        return self._data
+        return 0.0
 
     @property
     def field_mT(self) -> None:
