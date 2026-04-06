@@ -288,8 +288,6 @@ class ADS114S0x(ADCBase):
     _SPI_BUS = 1
     _SPI_DEVICE = 0
 
-    # TODO: Do the rest of the global variables in hall.py need to be added?
-
     # Constants
     _HIGH = True
     _LOW = False
@@ -439,24 +437,27 @@ class ADS114S0x(ADCBase):
     
     def _read_data_millivolts(self): 
         """Returns channel readings in millivolts."""
+        row = []
         if self._channels:
             for ch in self._channels.values():
                 self.set_mux_single_ended(ch.ain_pos_code)
                 self.discard_settling_reads(timeout_ms=1000)
-                self.send_start()
-                code16, status = self.wait_and_read_code16()
+                self.start_conversions()
+                code16, _ = self.wait_and_read_code16()
+                volts = self.code16_to_volts(code16)
+                millivolts = volts * 1000
+
+                if ch.postprocess is not None:
+                    millivolts = ch.postprocess(millivolts)
+
+                row += [millivolts]
                 
-
-
-            
-
-
-                
-                    
         else:
+            row = None
             LOGGER.info("No channels have been configured for reading. Use ChannelConfig.")
 
-        
+        return row
+
     # Properties required by SensorBase
     @property
     def is_streaming(self) -> bool:
@@ -476,7 +477,6 @@ class ADS114S0x(ADCBase):
         Returns:
             np.ndarray: Array of voltage readings for each channel.
         """
-        # TODO: self._data currently never gets updated
         return self._data
 
     # Functions replacing ADCBase functions
@@ -765,14 +765,14 @@ class ADS114S0x(ADCBase):
             self._spi.close()
             self._spi = None
 
-    def delay_ms(delay_time_ms: int) -> None:
-        """
-        Provides a timing delay with millisecond resolution
+    # def delay_ms(delay_time_ms: int) -> None:
+    #     """
+    #     Provides a timing delay with millisecond resolution
 
-        Args:
-            delay_time_ms: Number of milliseconds to delay
-        """
-        sleep(delay_time_ms / 1000.0)
+    #     Args:
+    #         delay_time_ms: Number of milliseconds to delay
+    #     """
+    #     sleep(delay_time_ms / 1000.0)
 
     def delay_us(self, delay_time_us: int) -> None:
         """
@@ -984,12 +984,12 @@ class ADS114S0x(ADCBase):
             self.send_start()
             _ = self.wait_and_read_code16(timeout_ms=timeout_ms)
 
-    def code16_to_volts(self, code16: int, *, vref_volts: float, gain: int) -> float:
+    def code16_to_volts(self, code16: int) -> float:
         """
         Signed 16-bit ADC code in [-32768..32767]
         Vin = code * (Vref/gain) / 32768
         """
-        return (code16 * (vref_volts / float(gain))) / 32768.0
+        return (code16 * (self._voltage_reference / float(self._pga_gain))) / 32768.0
 
     # Functions transferred from VSO_CODEBASE_DEV repo multi_channel_read.py
     def adc_configure_common(
