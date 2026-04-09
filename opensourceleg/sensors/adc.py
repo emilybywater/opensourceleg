@@ -1045,7 +1045,7 @@ class ADS114S0x(ADCBase):
             raise ValueError(f"Unsupported frequency={self._data_rate}. Choose from {sorted(rate_to_code.keys())}")
         data_rate_code = rate_to_code[self._data_rate]
         convmode = self._ADS_CONVMODE_SS if single_shot else self._ADS_CONVMODE_CONT
-        ftype = self._ADS_FILTERTYPE_LL if filter_low_latency else self._ADS_CONVMODE_CONT
+        ftype = self._ADS_FILTERTYPE_LL if filter_low_latency else 0x00
         datarate_reg = convmode | ftype | (data_rate_code & 0x0F)
         self.write_single_register(self._REG_ADDR_DATARATE, datarate_reg)
 

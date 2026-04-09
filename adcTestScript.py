@@ -32,7 +32,7 @@ import traceback
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 trialNumber = '1'
 subjIDCode = 'trial'
-FREQUENCY = 1000 # in Hz
+FREQUENCY = 200 # in Hz
 OFFLINE = False 
 
 # set up logging configurables  
@@ -53,9 +53,9 @@ def controller_main():
         tag ="variableStiffessOrthosis",
         actuators={},
         sensors={
-                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=1000, drdy=16, voltage_reference=1.65),
+                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=2000, drdy=16, voltage_reference=1.65),
                 "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
-                # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =3.3),
+                # "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensocr_num="A1", t_a = 23, supply_voltage =3.3),
             },
         )
     
@@ -74,7 +74,10 @@ def controller_main():
     position = 0 
     # track specific information using track function in datalog 
     datalog.track_function(elapsed_time, name="time")
-    datalog.track_function(lambda: vso.sensors["adc"]._data, name="adc mV packet") # mV
+    datalog.track_function(
+        lambda: ([x / 1000 for x in getattr(vso.sensors.get("adc", []), "_data", [0])]),
+        name="adc V packet"
+    )    
     # datalog.track_function(lambda: vso.sensors["hallEffect_2"].voltage, name="hallEffect_2_voltage") # mV
     
     LOGGER.info("Finished setting up datalogger...")
@@ -96,7 +99,7 @@ def controller_main():
             vso.update()
             # position = vso.sensors["ankle_encoder"].position - init.load_calib_offset()
             datalog.update() # update values into the datalog  
-            # datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
+            datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
             # profiler.toc() # end the profiler timing 
 

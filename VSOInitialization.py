@@ -65,7 +65,8 @@ class VSOInitialization:
 
         Args:
             run_calibration: If True, runs stroke calibration to compute scale_perc before homing. 
-            Use after disassembly or first-time setup. 
+            Use after disassembly or first-time setup. adc = ADS114S0x.__init__
+
             If False, assumes calibration file exists.
         """
         if self.vso.actuators.get("ankle", None) is not None:
