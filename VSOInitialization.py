@@ -68,7 +68,7 @@ class VSOInitialization:
             Use after disassembly or first-time setup. 
             If False, assumes calibration file exists.
         """
-        if self.vso.sensors.get("ankle", None) is not None:
+        if self.vso.actuators.get("ankle", None) is not None:
             actuator = self.vso.actuators["ankle"]
         else:
             actuator = None
@@ -121,7 +121,7 @@ class VSOInitialization:
             adc = None
         
         time.sleep(0.05)  
-
+ 
         if actuator is not None and encoder_counter is not None:
             calibration = VSOCalibration(
                 vso=self.vso,

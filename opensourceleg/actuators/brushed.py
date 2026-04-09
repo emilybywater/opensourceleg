@@ -83,7 +83,7 @@ class MaxonActuator(ActuatorBase):
         gear_ratio: float = 6.6,
         frequency: float = 6000,
         offline: bool = False,
-        pwm_maximum_command: float = 0.85,
+        pwm_maximum_command: float = 0.3,
         pwm_minimum_command: float = 0.07,
         pwm_lower_limit: float = 0.02,
         tag: str = "maxon_actuator",

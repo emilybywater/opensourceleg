@@ -9,7 +9,7 @@ class sliderPosition:
     Drives the spring-support from its current position to a new position,
     which can be either based on a number of mm or a % of the total stroke.
     """
-
+        
     def slider_position(MaxonActuator, desired_position_perc) -> None:
         """
         PID control of the VSO spring support including pwm saturation, small position deadband,
@@ -33,7 +33,7 @@ class sliderPosition:
 
                 if not ankle_in_range:
                     MaxonActuator.stop()
-                    return
+                    return True
 
                 MaxonActuator.check_coupler_drift()
 
@@ -44,7 +44,7 @@ class sliderPosition:
                         desired_position_encoder = MaxonActuator.slider_min_counts
                 else:  # slider position is already close enough to commanded position (conserves battery)
                     MaxonActuator.stop()
-                    return
+                    return True 
 
                 current_time = time.time()
                 dt = current_time - last_time
@@ -56,10 +56,10 @@ class sliderPosition:
                 if t_elapsed > MaxonActuator.time_limit:
                     LOGGER.warning("Slider may be jammed - please check prototype (pwm set to zero for safety)")
                     MaxonActuator.stop()
-                    return
+                    return True
 
                 error_encoder = int(desired_position_encoder - MaxonActuator.motor_position_cts)
-
+                MaxonActuator.position_control_init()
                 pwm = MaxonActuator.pid_ctrl_position(error_encoder, dt)
                 
                 if pwm < 0.0:

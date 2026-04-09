@@ -12,7 +12,7 @@ from datetime import datetime
 import time
 from opensourceleg.robots.vso import VSO
 from opensourceleg.actuators.base import CONTROL_MODES
-from opensourceleg.actuators.brushed import MaxonActuator ## add the additional things that may be needed here !! 
+from opensourceleg.actuators.brushed import MaxonActuator 
 from opensourceleg.logging import LOGGER
 from opensourceleg.logging.logger import Logger
 from opensourceleg.sensors.base import SensorBase
@@ -32,7 +32,7 @@ import traceback
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 trialNumber = '1'
 subjIDCode = 'trial'
-FREQUENCY = 200 # in Hz
+FREQUENCY = 1000 # in Hz
 OFFLINE = False 
 
 # set up logging configurables  
@@ -46,6 +46,7 @@ def controller_main():
     datalog = Logger(log_path= loggingPath,file_name=logName)
     
     LOGGER.info("Finished initializing data logger...")
+    
 
     # define the "VSO" robot 
     vso = VSO[MaxonActuator, SensorBase](
@@ -60,7 +61,7 @@ def controller_main():
     
     LOGGER.info("Finished setting up VSO...")
 
-    profiler = Profiler("ouput_run")
+    # profiler = Profiler("ouput_run")
 
     LOGGER.info("Finished setting up profiler...")
 
@@ -90,14 +91,14 @@ def controller_main():
         loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
         
         for t in loop:
-            profiler.tic() # start the profiler timing 
+            # profiler.tic() # start the profiler timing 
             
             vso.update()
             # position = vso.sensors["ankle_encoder"].position - init.load_calib_offset()
             datalog.update() # update values into the datalog  
-            datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
+            # datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
-            profiler.toc() # end the profiler timing 
+            # profiler.toc() # end the profiler timing 
 
 
 

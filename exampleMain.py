@@ -95,7 +95,7 @@ def controller_main():
 
         LOGGER.info("Starting VSO initialization sequence...")
         init = VSOInitialization(vso=vso, side=1, homing_pwm = 0.45)
-        init.run(run_calibration=False)  # if not disassembled !
+        init.run(run_calibration=True)  # if not disassembled !
 
 
         input('\nPress any key to begin walking:') 
