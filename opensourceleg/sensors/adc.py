@@ -348,7 +348,7 @@ class ADS114S0x(ADCBase):
         self._voltage_reference = voltage_reference
         self._streaming = False
         self._data_rate = data_rate
-        self._drdy = DigitalInputDevice(drdy, pull_up = False)
+        self._drdy = DigitalInputDevice(drdy, pull_up=False)
         self._channels: Dict[str, ChannelConfig] = {}
         LOGGER.info(f"ADC initialized with tag: {self._tag}")
 
@@ -788,18 +788,19 @@ class ADS114S0x(ADCBase):
 
     def wait_for_drdy_htol(self, timeout_ms: int) -> bool:
         """
-        Waits for nDRDY GPIO to go from High to Low or until timeout
-
+        Waits for conversion to complete by sleeping one conversion period.
+ 
+        In single-shot mode with the low-latency filter, each conversion takes
+        1/data_rate seconds. A 1.5x multiplier provides a safe margin.
+ 
         Args:
-            timeout_ms: Number of milliseconds to wait before timeout
-
+            timeout_ms: Unused; kept for API compatibility.
+ 
         Returns:
-            True if nDRDY interrupt occurred before timeout, False otherwise
+            Always True.
         """
-        timeout_s = timeout_ms / 1000.0
-        success = self._drdy.wait_for_active(timeout=timeout_s)
-        
-        return bool(success)
+        sleep(1.5 / self._data_rate)
+        return True
 
     def send_start(self) -> None:
         """
