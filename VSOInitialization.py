@@ -56,6 +56,7 @@ class VSOInitialization:
         self.position_threshold = position_threshold
         self.side = side
         self.bat_div_gain = bat_div_gain
+        self.calib_offset = 0.0
 
         LOGGER.info("VSO Initialization instance created.")
 
@@ -86,7 +87,10 @@ class VSOInitialization:
 
         if self.vso.sensors.get("adc", None) is not None:
             adc = self.vso.sensors["adc"]
-            adc.adc_configure_common(single_shot=True,filter_low_latency=True)
+            adc.adc_configure_common(single_shot=True, filter_low_latency=True)
+            # readback = adc.read_single_register(adc._REG_ADDR_DATARATE)
+            # print(f"DATARATE register: 0x{readback:02X}  (expected 0x3C)")
+
             
             if self.vso.sensors.get("hallEffect_1", None) is not None:
                 hall1 = self.vso.sensors.get("hallEffect_1")
@@ -164,16 +168,16 @@ class VSOInitialization:
 
             sliderPosition.slider_position(actuator, desired_position_perc=99.5)
 
-            if ankle_sensor is not None:
-                # Step 3: Ankle encoder offset calibration at 100% stiffness
-                LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
-                time.sleep(2)  # Warmup period for ankle encoder to stabilize
-                ankle_sensor.update()
-                calib_offset = self.side*np.rad2deg(ankle_sensor.position)
-                self._save_calib_offset(calib_offset)
-                LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={calib_offset:.4f} deg")
-            else:
-                LOGGER.info(f"No ankle encoder. Could not capture unloaded equilibrium angle.")
+        if ankle_sensor is not None:
+            # Step 3: Ankle encoder offset calibration at 100% stiffness
+            LOGGER.info("Capturing unloaded equilibrium angle. Waiting for ankle encoder warmup.")
+            time.sleep(2)  # Warmup period for ankle encoder to stabilize
+            ankle_sensor.update()
+            self.calib_offset = self.side*np.rad2deg(ankle_sensor.position)
+            self._save_calib_offset()
+            LOGGER.info(f"Ankle encoder offset calibrated. calib_offset={self.calib_offset:.4f} deg")
+        else:
+            LOGGER.info(f"No ankle encoder. Could not capture unloaded equilibrium angle.")
 
 
         LOGGER.info("VSO initialization complete.")
@@ -182,7 +186,7 @@ class VSOInitialization:
         """Convert ADC-pin voltage to battery voltage (undo divider)."""
         return volts_at_adc * bat_div_gain
 
-    def _save_calib_offset(self, calib_offset: float) -> None:
+    def _save_calib_offset(self) -> None:
         """
         Save the ankle encoder calibration offset to file.
 
@@ -190,10 +194,10 @@ class VSOInitialization:
             calib_offset: The unloaded equilibrium angle in radians.
         """
         with open(self.calib_offset_path, "w") as f:
-            json.dump({"calib_offset": calib_offset}, f, indent=2)
+            json.dump({"calib_offset": self.calib_offset}, f, indent=2)
         LOGGER.info(f"calib_offset saved to {self.calib_offset_path}")
 
-    def load_calib_offset(self) -> float:
+    def load_calib_offset(self) -> None:
         """
         Load the ankle encoder calibration offset from file.
 
@@ -210,9 +214,8 @@ class VSOInitialization:
             )
         with open(self.calib_offset_path, "r") as f:
             data = json.load(f)
-        calib_offset = data["calib_offset"]
-        LOGGER.info(f"Loaded calib_offset: {calib_offset:.4f} from {self.calib_offset_path}")
-        return calib_offset
+        self.calib_offset = data["calib_offset"]
+        LOGGER.info(f"Loaded calib_offset: {self.calib_offset:.4f} from {self.calib_offset_path}")
     
 
 if __name__ == "__main__":

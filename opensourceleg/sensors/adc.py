@@ -376,6 +376,7 @@ class ADS114S0x(ADCBase):
 
         # Configure initial device register settings
         self.write_single_register(self._REG_ADDR_STATUS, 0x00)  # Reset POR event
+        self._set_device_state(1)
         LOGGER.info("ADC started successfully.")
 
     def _set_device_state(self, state: int) -> None:
@@ -399,7 +400,6 @@ class ADS114S0x(ADCBase):
         LOGGER.info("Stopping ADC...")
         self.send_stop()
         self.cleanup()
-        self._set_device_state(0)
         LOGGER.info("ADC stopped successfully.")
 
     def update(self): 
