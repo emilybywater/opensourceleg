@@ -35,7 +35,7 @@ subjIDCode = 'trial'
 FREQUENCY = 200 # in Hz
 OFFLINE = False 
 
-side = 1
+side = -1
 
 # set up logging configurables  
 logName = subjIDCode + '_' + timestamp + '_' + trialNumber
@@ -99,15 +99,37 @@ def controller_main():
         vso.update() # call an update of the robot
         loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
         
+        angle_last = 0.0
+        hall1_last = 0.0
+        hall2_last = 0.0
+        dorsi_switch = False
+        plantar_switch = False
         for t in loop:
             # profiler.tic() # start the profiler timing 
-            
             vso.update()
+
+            angle = side * np.rad2deg(vso.sensors["ankle_encoder"].position) - init.calib_offset
+            hall1 = getattr(vso.sensors.get("adc", []), "_data", [0, 0])[0] / 1000
+            hall2 = getattr(vso.sensors.get("adc", []), "_data", [0, 0])[1] / 1000
+            if angle > angle_last and -1.45 <= hall2 <= -1.25 and hall1 < -1.07 and \
+                (hall1 - hall1_last) < 0.1 and dorsi_switch is False:
+                print('Dorsiflexion switch detected!')
+                dorsi_switch = True
+                plantar_switch = False
+            elif angle < angle_last and -1.0 <= hall1 <= -0.9 and hall2 > -1.25 and \
+                plantar_switch is False:
+                print('Plantarflexion switch detected!')
+                dorsi_switch = False
+                plantar_switch = True
+
             datalog.update() # update values into the datalog  
             datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
             
             profiler.toc() # end the profiler timing 
-
+            
+            angle_last = angle
+            hall1_last = hall1
+            hall2_last = hall2
 
 
 if __name__ == "__main__":

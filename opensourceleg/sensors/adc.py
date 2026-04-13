@@ -457,7 +457,7 @@ class ADS114S0x(ADCBase):
             row = None
             LOGGER.info("No channels have been configured for reading. Use ChannelConfig.")
 
-        print(row)
+        # print(row)
         return row
 
     # Properties required by SensorBase
