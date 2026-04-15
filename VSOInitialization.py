@@ -68,15 +68,15 @@ class VSOInitialization:
 
         LOGGER.info("VSO Initialization instance created.")
 
-    def run(self, run_calibration: bool = False) -> None:
+    def run(self, run_calibration: bool = False, run_hall_calibration: bool = False) -> None:
         """
         Run the full VSO initialization sequence.
 
         Args:
-            run_calibration: If True, runs stroke calibration to compute scale_perc before homing. 
-            Use after disassembly or first-time setup. adc = ADS114S0x.__init__
-
-            If False, assumes calibration file exists.
+            run_calibration: If True, runs stroke calibration to compute scale_perc before homing.
+                Use after disassembly or first-time setup.
+            run_hall_calibration: If True, runs interactive hall switch threshold calibration
+                after the ankle encoder offset is captured.  Saves results to hall_threshold_path.
         """
         if self.vso.actuators.get("ankle", None) is not None:
             actuator = self.vso.actuators["ankle"]
@@ -187,6 +187,13 @@ class VSOInitialization:
         else:
             LOGGER.info(f"No ankle encoder. Could not capture unloaded equilibrium angle.")
 
+        # Step 4: Optional hall switch threshold calibration
+        if run_hall_calibration:
+            LOGGER.info("Running hall switch calibration.")
+            self.calibrate_hall_switches()
+            LOGGER.info("Hall switch calibration complete.")
+        else:
+            LOGGER.info("Skipping hall switch calibration. Assuming threshold file exists.")
 
         LOGGER.info("VSO initialization complete.")
 
@@ -228,8 +235,10 @@ class VSOInitialization:
     def calibrate_hall_switches(
         self,
         frequency: int = 200,
-        margin_v: float = 0.05,
-        margin_deg: float = 3.0,
+        n_std_hall: float = 2.0,
+        n_std_angle: float = 2.0,
+        min_margin_v: float = 0.02,
+        min_margin_deg: float = 1.0,
     ) -> dict:
         """
         Interactive calibration of hall-effect switch thresholds.
@@ -410,41 +419,67 @@ class VSOInitialization:
             )
 
         def _bounds_v(values):
-            return min(values) - margin_v, max(values) + margin_v
+            """mean ± n_std_hall*σ, with a minimum half-width of min_margin_v."""
+            a = np.array(values)
+            half = max(n_std_hall * float(a.std()), min_margin_v)
+            return float(a.mean()) - half, float(a.mean()) + half
 
         def _bounds_deg(values):
-            return min(values) - margin_deg, max(values) + margin_deg
+            """mean ± n_std_angle*σ, with a minimum half-width of min_margin_deg."""
+            a = np.array(values)
+            half = max(n_std_angle * float(a.std()), min_margin_deg)
+            return float(a.mean()) - half, float(a.mean()) + half
 
-        d_h1     = [e["hall1"]     for e in dorsi_events]
-        d_h2     = [e["hall2"]     for e in dorsi_events]
-        d_h1_dot = [e["hall1_dot"] for e in dorsi_events]
-        d_ang    = [e["angle"]     for e in dorsi_events]
+        def _dot_upper(values):
+            """Upper bound on abs derivative: mean + n_std_hall*σ, floored at min_margin_v."""
+            a = np.abs(values)
+            return float(a.mean()) + max(n_std_hall * float(a.std()), min_margin_v)
+
+        def _summary_v(values, lo, hi):
+            a = np.array(values)
+            return f"[{lo:.4f}, {hi:.4f}] V  (μ={a.mean():.4f} σ={a.std():.4f})"
+
+        def _summary_deg(values, lo, hi):
+            a = np.array(values)
+            return f"[{lo:.2f}, {hi:.2f}]°  (μ={a.mean():.2f} σ={a.std():.2f})"
+
+        d_h1      = [e["hall1"]     for e in dorsi_events]
+        d_h2      = [e["hall2"]     for e in dorsi_events]
+        d_h1_dot  = [e["hall1_dot"] for e in dorsi_events]
+        d_ang     = [e["angle"]     for e in dorsi_events]
         d_ang_dot = [e["angle_dot"] for e in dorsi_events]
 
-        p_h1     = [e["hall1"]     for e in plantar_events]
-        p_h2     = [e["hall2"]     for e in plantar_events]
-        p_ang    = [e["angle"]     for e in plantar_events]
+        p_h1      = [e["hall1"]     for e in plantar_events]
+        p_h2      = [e["hall2"]     for e in plantar_events]
+        p_ang     = [e["angle"]     for e in plantar_events]
         p_ang_dot = [e["angle_dot"] for e in plantar_events]
+
+        d_h1_lo,  d_h1_hi  = _bounds_v(d_h1)
+        d_h2_lo,  d_h2_hi  = _bounds_v(d_h2)
+        d_ang_lo, d_ang_hi = _bounds_deg(d_ang)
+        p_h1_lo,  p_h1_hi  = _bounds_v(p_h1)
+        p_h2_lo,  p_h2_hi  = _bounds_v(p_h2)
+        p_ang_lo, p_ang_hi = _bounds_deg(p_ang)
 
         thresholds = {
             "dorsiflexion": {
-                "hall1_lower": _bounds_v(d_h1)[0],
-                "hall1_upper": _bounds_v(d_h1)[1],
-                "hall2_lower": _bounds_v(d_h2)[0],
-                "hall2_upper": _bounds_v(d_h2)[1],
-                "hall1_dot_upper": max(abs(v) for v in d_h1_dot) + margin_v,
-                "angle_lower": _bounds_deg(d_ang)[0],
-                "angle_upper": _bounds_deg(d_ang)[1],
+                "hall1_lower": d_h1_lo,
+                "hall1_upper": d_h1_hi,
+                "hall2_lower": d_h2_lo,
+                "hall2_upper": d_h2_hi,
+                "hall1_dot_upper": _dot_upper(d_h1_dot),
+                "angle_lower": d_ang_lo,
+                "angle_upper": d_ang_hi,
                 "angle_dot_sign": 1 if float(np.mean(d_ang_dot)) >= 0 else -1,
                 "n_events": len(dorsi_events),
             },
             "plantarflexion": {
-                "hall1_lower": _bounds_v(p_h1)[0],
-                "hall1_upper": _bounds_v(p_h1)[1],
-                "hall2_lower": _bounds_v(p_h2)[0],
-                "hall2_upper": _bounds_v(p_h2)[1],
-                "angle_lower": _bounds_deg(p_ang)[0],
-                "angle_upper": _bounds_deg(p_ang)[1],
+                "hall1_lower": p_h1_lo,
+                "hall1_upper": p_h1_hi,
+                "hall2_lower": p_h2_lo,
+                "hall2_upper": p_h2_hi,
+                "angle_lower": p_ang_lo,
+                "angle_upper": p_ang_hi,
                 "angle_dot_sign": 1 if float(np.mean(p_ang_dot)) >= 0 else -1,
                 "n_events": len(plantar_events),
             },
@@ -455,20 +490,16 @@ class VSOInitialization:
 
         d = thresholds["dorsiflexion"]
         p = thresholds["plantarflexion"]
-        print(f"\nThresholds saved to {self.hall_threshold_path}")
-        print(
-            f"  Dorsiflexion  ({d['n_events']} events): "
-            f"hall1=[{d['hall1_lower']:.4f}, {d['hall1_upper']:.4f}] V  "
-            f"hall2=[{d['hall2_lower']:.4f}, {d['hall2_upper']:.4f}] V  "
-            f"d(h1)_upper={d['hall1_dot_upper']:.4f}  "
-            f"angle=[{d['angle_lower']:.2f}, {d['angle_upper']:.2f}]°"
-        )
-        print(
-            f"  Plantarflexion ({p['n_events']} events): "
-            f"hall1=[{p['hall1_lower']:.4f}, {p['hall1_upper']:.4f}] V  "
-            f"hall2=[{p['hall2_lower']:.4f}, {p['hall2_upper']:.4f}] V  "
-            f"angle=[{p['angle_lower']:.2f}, {p['angle_upper']:.2f}]°"
-        )
+        print(f"\nThresholds saved to {self.hall_threshold_path}  (n_std_hall={n_std_hall}  n_std_angle={n_std_angle})")
+        print(f"  Dorsiflexion  ({d['n_events']} events):")
+        print(f"    hall1  {_summary_v(d_h1,  d_h1_lo,  d_h1_hi)}")
+        print(f"    hall2  {_summary_v(d_h2,  d_h2_lo,  d_h2_hi)}")
+        print(f"    angle  {_summary_deg(d_ang, d_ang_lo, d_ang_hi)}")
+        print(f"    d(h1)_upper = {d['hall1_dot_upper']:.4f}")
+        print(f"  Plantarflexion ({p['n_events']} events):")
+        print(f"    hall1  {_summary_v(p_h1,  p_h1_lo,  p_h1_hi)}")
+        print(f"    hall2  {_summary_v(p_h2,  p_h2_lo,  p_h2_hi)}")
+        print(f"    angle  {_summary_deg(p_ang, p_ang_lo, p_ang_hi)}")
         LOGGER.info(f"Hall switch thresholds saved to {self.hall_threshold_path}")
 
         return thresholds

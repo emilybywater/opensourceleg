@@ -80,6 +80,8 @@ def controller_main():
 
     ENCODER_ALPHA = 0.15  # EMA smoothing factor (~5 Hz cutoff at 200 Hz)
     angle_filt = 0.0
+    dorsi_switch = False
+    plantar_switch = False
 
     # track specific information using track function in datalog
     datalog.track_function(elapsed_time, name="time")
@@ -92,14 +94,15 @@ def controller_main():
         lambda: (getattr(vso.sensors.get("adc", []), "_data", [0, 0])[1] / 1000),
         name="hallEffect_2"
     )
+    datalog.track_function(lambda: int(dorsi_switch), name="dorsiflexionSwitch")
+    datalog.track_function(lambda: int(plantar_switch), name="plantarflexionSwitch")
 
     LOGGER.info("Finished setting up datalogger...")
     
     with vso, datalog:
         
         LOGGER.info("Starting VSO initialization sequence...")
-        init.run(run_calibration=False)  # if not disassembled !
-        init.calibrate_hall_switches()
+        init.run(run_calibration=False, run_hall_calibration=True)
 
         # Load hall switch thresholds from calibration file
         thresholds = init.load_hall_thresholds()
@@ -113,8 +116,8 @@ def controller_main():
         angle_last = 0.0
         hall1_last = 0.0
         hall2_last = 0.0
-        dorsi_switch = False
-        plantar_switch = False
+        loop_count = 0
+        t_start_walk = time.monotonic()
         for t in loop:
             # profiler.tic() # start the profiler timing
             vso.update()
@@ -136,7 +139,11 @@ def controller_main():
                     and abs(hall1_dot) <= d_thresh["hall1_dot_upper"]
                     and d_thresh["angle_lower"] <= angle <= d_thresh["angle_upper"]
                     and not dorsi_switch):
-                print('Dorsiflexion switch detected!')
+                print('\n  Dorsiflexion switch detected!')
+                dorsi_switch = True
+                plantar_switch = False
+            elif angle > d_thresh["angle_upper"] and not dorsi_switch:
+                print('\n  Dorsiflexion switch forced (past range)!')
                 dorsi_switch = True
                 plantar_switch = False
             elif (plantar_angle_ok
@@ -144,15 +151,34 @@ def controller_main():
                     and p_thresh["hall2_lower"] <= hall2 <= p_thresh["hall2_upper"]
                     and p_thresh["angle_lower"] <= angle <= p_thresh["angle_upper"]
                     and not plantar_switch):
-                print('Plantarflexion switch detected!')
+                print('\n  Plantarflexion switch detected!')
+                dorsi_switch = False
+                plantar_switch = True
+            elif angle < p_thresh["angle_lower"] and not plantar_switch:
+                print('\n  Plantarflexion switch forced (past range)!')
                 dorsi_switch = False
                 plantar_switch = True
 
-            datalog.update() # update values into the datalog  
+            # Live sensor readout at 10 Hz
+            if loop_count % 20 == 0:
+                elapsed = time.monotonic() - t_start_walk
+                state = "DORSI " if dorsi_switch else "PLANTAR" if plantar_switch else "-------"
+                print(
+                    f"\r  t={elapsed:6.1f}s"
+                    f"  angle={angle:+7.2f}°"
+                    f"  h1={hall1:+.4f} V  h2={hall2:+.4f} V"
+                    f"  d(h1)={hall1_dot:+.5f}  d(ang)={angle_dot:+.5f}"
+                    f"  [{state}]   ",
+                    end="",
+                    flush=True,
+                )
+            loop_count += 1
+
+            datalog.update() # update values into the datalog
             datalog.flush_buffer() # can sometimes speed up the loop, this flushes the buffered log data to the CSV file.
-            
-            profiler.toc() # end the profiler timing 
-            
+
+            profiler.toc() # end the profiler timing
+
             angle_last = angle
             hall1_last = hall1
             hall2_last = hall2
