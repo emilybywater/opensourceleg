@@ -1,23 +1,23 @@
 {
   "dorsiflexion": {
-    "hall1_lower": -1.248551238884958,
-    "hall1_upper": -1.0408606873845736,
-    "hall2_lower": -1.4846980926098947,
-    "hall2_upper": -1.3882160309252614,
-    "hall1_dot_upper": 0.15354280846529164,
-    "angle_lower": 16.300504631717583,
-    "angle_upper": 18.552030137037658,
+    "hall1_lower": -1.2610769453867943,
+    "hall1_upper": -1.0386956986561744,
+    "hall2_lower": -1.4953547022634066,
+    "hall2_upper": -1.3817037083811246,
+    "hall1_dot_upper": 0.1644424674661423,
+    "angle_lower": 10.701412764758034,
+    "angle_upper": 12.701412764758034,
     "angle_dot_sign": 1,
-    "n_events": 18
+    "n_events": 22
   },
   "plantarflexion": {
-    "hall1_lower": -1.0504311432211595,
-    "hall1_upper": -0.9375113616616528,
-    "hall2_lower": -1.3547168161355498,
-    "hall2_upper": -1.2051073008891893,
-    "angle_lower": -1.9080518026408622,
-    "angle_upper": 0.09194819735913784,
+    "hall1_lower": -1.0353998260454216,
+    "hall1_upper": -0.9618326276740076,
+    "hall2_lower": -1.3147572991773546,
+    "hall2_upper": -1.2099880780729846,
+    "angle_lower": -7.551372339602767,
+    "angle_upper": -5.551372339602767,
     "angle_dot_sign": -1,
-    "n_events": 18
+    "n_events": 23
   }
 }
