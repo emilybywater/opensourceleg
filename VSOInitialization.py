@@ -239,25 +239,33 @@ class VSOInitialization:
         n_std_angle: float = 2.0,
         min_margin_v: float = 0.02,
         min_margin_deg: float = 1.0,
+        neg_exclusion_pct: float = 90.0,
     ) -> dict:
         """
         Interactive calibration of hall-effect switch thresholds.
 
         Runs a sensor-read loop and records hall1, hall2, ankle angle, and
-        their sample-to-sample derivatives at each labelled switch event.
-        When finished, thresholds are derived as (min - margin, max + margin)
-        across all events of each type and written to self.hall_threshold_path.
+        their sample-to-sample derivatives at each labelled event. Switch
+        windows are computed as mean ± n_std*σ, then clipped using labelled
+        non-switch samples so the windows actively exclude non-switch territory.
 
         Controls during the loop:
-            d      — dorsiflexion switch just fired
-            p      — plantarflexion switch just fired
+            d      — dorsiflexion switch just fired (windowed peak detection)
+            p      — plantarflexion switch just fired (windowed peak detection)
+            n      — not a switch right now (records current values directly)
             ENTER  — finish and save thresholds
 
         Call this after init.run() so that self.calib_offset is already set.
 
         Args:
-            frequency:  Sensor-read rate in Hz (default 200).
-            margin_v:   Voltage added to each bound as a detection margin (default 0.05 V).
+            frequency:          Sensor-read rate in Hz (default 200).
+            n_std_hall:         Half-width of hall voltage windows in σ (default 2.0).
+            n_std_angle:        Half-width of angle window in σ (default 2.0).
+            min_margin_v:       Minimum half-width for hall windows in V (default 0.02).
+            min_margin_deg:     Minimum half-width for angle window in degrees (default 1.0).
+            neg_exclusion_pct:  Percentile of non-switch intrusions to exclude when
+                                clipping windows (default 90.0 → exclude 90 % of
+                                intruding non-switch samples on each side).
 
         Returns:
             Threshold dict (same structure written to JSON).
@@ -272,8 +280,9 @@ class VSOInitialization:
         if adc is None:
             raise RuntimeError("ADC sensor not found in VSO — cannot calibrate hall switches.")
 
-        dorsi_events = []    # list of {hall1, hall2, hall1_dot, hall2_dot, angle_dot}
-        plantar_events = []
+        dorsi_events   = []  # peak sample at each dorsi switch
+        plantar_events = []  # peak sample at each plantar switch
+        no_switch_events = []  # current sample each time user marks a non-switch moment
 
         dt = 1.0 / frequency
         encoder_alpha = 0.15  # EMA smoothing factor (~5 Hz cutoff at 200 Hz)
@@ -288,9 +297,9 @@ class VSOInitialization:
         hall2_last = 0.0
 
         rolling_buf = deque(maxlen=pre_samples)  # continuous pre-window
-        pending_key  = None   # 'd' or 'p' while collecting post-window
-        post_buf     = []
-        post_remain  = 0
+        pending_key = None   # 'd' or 'p' while collecting post-window
+        post_buf    = []
+        post_remain = 0
 
         print()
         print("=" * 60)
@@ -299,9 +308,12 @@ class VSOInitialization:
         print("  Walk the exoskeleton through dorsi/plantarflexion cycles.")
         print("  Press a key near the time each mechanical switch fires —")
         print("  the peak hall derivative in the surrounding window is used.")
+        print("  Also press 'n' during clearly non-switch moments to help")
+        print("  tighten the windows against false positives.")
         print()
         print("    d     = dorsiflexion switch")
         print("    p     = plantarflexion switch")
+        print("    n     = not a switch (negative example)")
         print("    ENTER = done — compute and save thresholds")
         print("=" * 60)
         print()
@@ -341,7 +353,7 @@ class VSOInitialization:
                     "angle": angle,         "angle_dot": angle_dot,
                 }
 
-                # --- Post-window collection ---
+                # --- Post-window collection for switch events ---
                 if post_remain > 0:
                     post_buf.append(sample)
                     post_remain -= 1
@@ -363,8 +375,8 @@ class VSOInitialization:
                         print(
                             f"\n  [{label}]"
                             f"  hall1={peak['hall1']:+.4f} V  hall2={peak['hall2']:+.4f} V"
+                            f"  angle={peak['angle']:+7.2f}°"
                             f"  d(h1)={peak['hall1_dot']:+.5f}  d(h2)={peak['hall2_dot']:+.5f}"
-                            f"  d(ang)={peak['angle_dot']:+.4f}"
                         )
                         pending_key = None
                         post_buf = []
@@ -388,9 +400,23 @@ class VSOInitialization:
                         post_remain = post_samples
                         post_buf = []
 
+                    elif key.lower() == 'n' and pending_key is None:
+                        # Record current values directly — no windowing, we want
+                        # the "steady" non-switch reading, not any derivative peak.
+                        no_switch_events.append(sample)
+                        print(
+                            f"\n  [NO-SWITCH #{len(no_switch_events):02d}]"
+                            f"  hall1={hall1:+.4f} V  hall2={hall2:+.4f} V"
+                            f"  angle={angle:+7.2f}°"
+                        )
+
                 else:
                     elapsed = time.monotonic() - t_loop_start
-                    status = f"collecting +{post_samples - post_remain}/{post_samples}" if post_remain > 0 else f"dorsi={len(dorsi_events)} plantar={len(plantar_events)}"
+                    if post_remain > 0:
+                        status = f"collecting +{post_samples - post_remain}/{post_samples}"
+                    else:
+                        status = (f"d={len(dorsi_events)} p={len(plantar_events)}"
+                                  f" n={len(no_switch_events)}")
                     print(
                         f"\r  t={elapsed:6.1f}s"
                         f"  angle={angle:+7.2f}°"
@@ -418,31 +444,70 @@ class VSOInitialization:
                 f"plantar={len(plantar_events)} events. Need at least 1 of each."
             )
 
+        # ------------------------------------------------------------------ #
+        # Threshold computation                                                #
+        # ------------------------------------------------------------------ #
+
         def _bounds_v(values):
-            """mean ± n_std_hall*σ, with a minimum half-width of min_margin_v."""
+            """mean ± n_std_hall*σ, floored at min_margin_v half-width."""
             a = np.array(values)
             half = max(n_std_hall * float(a.std()), min_margin_v)
             return float(a.mean()) - half, float(a.mean()) + half
 
         def _bounds_deg(values):
-            """mean ± n_std_angle*σ, with a minimum half-width of min_margin_deg."""
+            """mean ± n_std_angle*σ, floored at min_margin_deg half-width."""
             a = np.array(values)
             half = max(n_std_angle * float(a.std()), min_margin_deg)
             return float(a.mean()) - half, float(a.mean()) + half
 
         def _dot_upper(values):
-            """Upper bound on abs derivative: mean + n_std_hall*σ, floored at min_margin_v."""
+            """mean(|derivative|) + n_std_hall*σ, floored at min_margin_v."""
             a = np.abs(values)
             return float(a.mean()) + max(n_std_hall * float(a.std()), min_margin_v)
 
-        def _summary_v(values, lo, hi):
-            a = np.array(values)
-            return f"[{lo:.4f}, {hi:.4f}] V  (μ={a.mean():.4f} σ={a.std():.4f})"
+        def _clip_with_negatives(lo, hi, switch_mean, neg_values, is_degrees=False):
+            """
+            Tighten [lo, hi] so that neg_exclusion_pct % of non-switch samples
+            that intrude from each side are pushed outside the window.
 
-        def _summary_deg(values, lo, hi):
-            a = np.array(values)
-            return f"[{lo:.2f}, {hi:.2f}]°  (μ={a.mean():.2f} σ={a.std():.2f})"
+            Non-switch samples below switch_mean can push the lower bound up;
+            non-switch samples above switch_mean can push the upper bound down.
+            If clipping makes the window degenerate (lo >= hi), the original
+            bounds are kept and a warning is printed.
+            """
+            if not neg_values:
+                return lo, hi, 0, 0
 
+            a = np.array(neg_values)
+            unit = "°" if is_degrees else " V"
+            orig_lo, orig_hi = lo, hi
+
+            below = a[(a >= orig_lo) & (a < switch_mean)]  # intruding from below
+            above = a[(a > switch_mean) & (a <= orig_hi)]  # intruding from above
+
+            n_below = len(below)
+            n_above = len(above)
+
+            if n_below > 0:
+                # Raise lower bound to the neg_exclusion_pct-th percentile of intruders
+                clip_lo = float(np.percentile(below, neg_exclusion_pct))
+                lo = max(lo, clip_lo)
+
+            if n_above > 0:
+                # Lower upper bound to the (100 - neg_exclusion_pct)-th percentile
+                clip_hi = float(np.percentile(above, 100.0 - neg_exclusion_pct))
+                hi = min(hi, clip_hi)
+
+            if lo >= hi:
+                LOGGER.warning(
+                    f"Negative-example clipping produced a degenerate window "
+                    f"({lo:.4f}{unit} >= {hi:.4f}{unit}). Reverting to original bounds."
+                )
+                return orig_lo, orig_hi, n_below, n_above
+
+            return lo, hi, n_below, n_above
+
+        # --- Extract switch event values ---
         d_h1      = [e["hall1"]     for e in dorsi_events]
         d_h2      = [e["hall2"]     for e in dorsi_events]
         d_h1_dot  = [e["hall1_dot"] for e in dorsi_events]
@@ -454,12 +519,26 @@ class VSOInitialization:
         p_ang     = [e["angle"]     for e in plantar_events]
         p_ang_dot = [e["angle_dot"] for e in plantar_events]
 
+        # --- Non-switch values (same dimensions) ---
+        ns_h1  = [e["hall1"] for e in no_switch_events]
+        ns_h2  = [e["hall2"] for e in no_switch_events]
+        ns_ang = [e["angle"] for e in no_switch_events]
+
+        # --- Initial windows from switch events ---
         d_h1_lo,  d_h1_hi  = _bounds_v(d_h1)
         d_h2_lo,  d_h2_hi  = _bounds_v(d_h2)
         d_ang_lo, d_ang_hi = _bounds_deg(d_ang)
         p_h1_lo,  p_h1_hi  = _bounds_v(p_h1)
         p_h2_lo,  p_h2_hi  = _bounds_v(p_h2)
         p_ang_lo, p_ang_hi = _bounds_deg(p_ang)
+
+        # --- Clip using non-switch examples ---
+        d_h1_lo,  d_h1_hi,  d_h1_nb,  d_h1_na  = _clip_with_negatives(d_h1_lo,  d_h1_hi,  float(np.mean(d_h1)),  ns_h1)
+        d_h2_lo,  d_h2_hi,  d_h2_nb,  d_h2_na  = _clip_with_negatives(d_h2_lo,  d_h2_hi,  float(np.mean(d_h2)),  ns_h2)
+        d_ang_lo, d_ang_hi, d_ang_nb, d_ang_na  = _clip_with_negatives(d_ang_lo, d_ang_hi, float(np.mean(d_ang)), ns_ang, is_degrees=True)
+        p_h1_lo,  p_h1_hi,  p_h1_nb,  p_h1_na  = _clip_with_negatives(p_h1_lo,  p_h1_hi,  float(np.mean(p_h1)),  ns_h1)
+        p_h2_lo,  p_h2_hi,  p_h2_nb,  p_h2_na  = _clip_with_negatives(p_h2_lo,  p_h2_hi,  float(np.mean(p_h2)),  ns_h2)
+        p_ang_lo, p_ang_hi, p_ang_nb, p_ang_na  = _clip_with_negatives(p_ang_lo, p_ang_hi, float(np.mean(p_ang)), ns_ang, is_degrees=True)
 
         thresholds = {
             "dorsiflexion": {
@@ -488,18 +567,35 @@ class VSOInitialization:
         with open(self.hall_threshold_path, "w") as f:
             json.dump(thresholds, f, indent=2)
 
+        def _clip_note(nb, na):
+            if nb == 0 and na == 0:
+                return ""
+            parts = []
+            if nb: parts.append(f"{nb} clipped below")
+            if na: parts.append(f"{na} clipped above")
+            return f"  ← {', '.join(parts)}"
+
         d = thresholds["dorsiflexion"]
         p = thresholds["plantarflexion"]
-        print(f"\nThresholds saved to {self.hall_threshold_path}  (n_std_hall={n_std_hall}  n_std_angle={n_std_angle})")
+        nn = len(no_switch_events)
+        print(f"\nThresholds saved to {self.hall_threshold_path}")
+        print(f"  (n_std_hall={n_std_hall}  n_std_angle={n_std_angle}"
+              f"  neg_exclusion_pct={neg_exclusion_pct}  n_negatives={nn})")
         print(f"  Dorsiflexion  ({d['n_events']} events):")
-        print(f"    hall1  {_summary_v(d_h1,  d_h1_lo,  d_h1_hi)}")
-        print(f"    hall2  {_summary_v(d_h2,  d_h2_lo,  d_h2_hi)}")
-        print(f"    angle  {_summary_deg(d_ang, d_ang_lo, d_ang_hi)}")
+        print(f"    hall1  [{d['hall1_lower']:.4f}, {d['hall1_upper']:.4f}] V"
+              f"  (μ={np.mean(d_h1):.4f} σ={np.std(d_h1):.4f}){_clip_note(d_h1_nb, d_h1_na)}")
+        print(f"    hall2  [{d['hall2_lower']:.4f}, {d['hall2_upper']:.4f}] V"
+              f"  (μ={np.mean(d_h2):.4f} σ={np.std(d_h2):.4f}){_clip_note(d_h2_nb, d_h2_na)}")
+        print(f"    angle  [{d['angle_lower']:.2f}, {d['angle_upper']:.2f}]°"
+              f"  (μ={np.mean(d_ang):.2f} σ={np.std(d_ang):.2f}){_clip_note(d_ang_nb, d_ang_na)}")
         print(f"    d(h1)_upper = {d['hall1_dot_upper']:.4f}")
         print(f"  Plantarflexion ({p['n_events']} events):")
-        print(f"    hall1  {_summary_v(p_h1,  p_h1_lo,  p_h1_hi)}")
-        print(f"    hall2  {_summary_v(p_h2,  p_h2_lo,  p_h2_hi)}")
-        print(f"    angle  {_summary_deg(p_ang, p_ang_lo, p_ang_hi)}")
+        print(f"    hall1  [{p['hall1_lower']:.4f}, {p['hall1_upper']:.4f}] V"
+              f"  (μ={np.mean(p_h1):.4f} σ={np.std(p_h1):.4f}){_clip_note(p_h1_nb, p_h1_na)}")
+        print(f"    hall2  [{p['hall2_lower']:.4f}, {p['hall2_upper']:.4f}] V"
+              f"  (μ={np.mean(p_h2):.4f} σ={np.std(p_h2):.4f}){_clip_note(p_h2_nb, p_h2_na)}")
+        print(f"    angle  [{p['angle_lower']:.2f}, {p['angle_upper']:.2f}]°"
+              f"  (μ={np.mean(p_ang):.2f} σ={np.std(p_ang):.2f}){_clip_note(p_ang_nb, p_ang_na)}")
         LOGGER.info(f"Hall switch thresholds saved to {self.hall_threshold_path}")
 
         return thresholds

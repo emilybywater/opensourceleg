@@ -37,7 +37,7 @@ subjIDCode = 'trial'
 FREQUENCY = 200 # in Hz
 OFFLINE = False 
 
-side = -1
+side = 1
 
 # set up logging configurables  
 logName = subjIDCode + '_' + timestamp + '_' + trialNumber
@@ -56,7 +56,7 @@ def controller_main():
         tag ="variableStiffessOrthosis",
         actuators={},
         sensors={
-                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=2000, drdy=16, voltage_reference=1.65),
+                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=0, spi_cs=1,data_rate=2000, drdy=16, voltage_reference=1.65),
                 "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
                 "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =3.3),
                 "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
@@ -65,6 +65,7 @@ def controller_main():
         )
     
     LOGGER.info("Finished setting up VSO...")
+    
 
     profiler = Profiler("ouput_run")
 
@@ -101,9 +102,9 @@ def controller_main():
     
     with vso, datalog:
         
-        input('\nPress any key to begin initialization. Are you on the blue cam?')
+        input('\nPress any key to begin initialization. Make sure you are on the blue cam!')
         LOGGER.info("Starting VSO initialization sequence...")
-        init.run(run_calibration=False, run_hall_calibration=False)
+        init.run(run_calibration=False, run_hall_calibration=True)
 
         # Load hall switch thresholds from calibration file
         thresholds = init.load_hall_thresholds()
