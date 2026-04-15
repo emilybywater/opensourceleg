@@ -1,5 +1,10 @@
 import json
+import select
+import sys
+import termios
 import time
+import tty
+from collections import deque
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -12,6 +17,7 @@ from calibration import VSOCalibration
 from sliderPosition import sliderPosition
 
 DEFAULT_CALIB_OFFSET_PATH = Path("vso_calib_offset.json")
+DEFAULT_HALL_THRESHOLD_PATH = Path("hall_switch_thresholds.json")
 
 
 class VSOInitialization:
@@ -41,6 +47,7 @@ class VSOInitialization:
         vso: VSO,
         calibration_path: Path = Path("vso_calibration.json"),
         calib_offset_path: Path = DEFAULT_CALIB_OFFSET_PATH,
+        hall_threshold_path: Path = DEFAULT_HALL_THRESHOLD_PATH,
         homing_pwm: float = 0.25,
         sample_rate: float = 0.05,
         position_threshold: int = 100,
@@ -51,6 +58,7 @@ class VSOInitialization:
         self.vso = vso
         self.calibration_path = calibration_path
         self.calib_offset_path = calib_offset_path
+        self.hall_threshold_path = Path(hall_threshold_path)
         self.homing_pwm = homing_pwm
         self.sample_rate = sample_rate
         self.position_threshold = position_threshold
@@ -216,7 +224,275 @@ class VSOInitialization:
             data = json.load(f)
         self.calib_offset = data["calib_offset"]
         LOGGER.info(f"Loaded calib_offset: {self.calib_offset:.4f} from {self.calib_offset_path}")
-    
+
+    def calibrate_hall_switches(
+        self,
+        frequency: int = 200,
+        margin_v: float = 0.05,
+        margin_deg: float = 3.0,
+    ) -> dict:
+        """
+        Interactive calibration of hall-effect switch thresholds.
+
+        Runs a sensor-read loop and records hall1, hall2, ankle angle, and
+        their sample-to-sample derivatives at each labelled switch event.
+        When finished, thresholds are derived as (min - margin, max + margin)
+        across all events of each type and written to self.hall_threshold_path.
+
+        Controls during the loop:
+            d      — dorsiflexion switch just fired
+            p      — plantarflexion switch just fired
+            ENTER  — finish and save thresholds
+
+        Call this after init.run() so that self.calib_offset is already set.
+
+        Args:
+            frequency:  Sensor-read rate in Hz (default 200).
+            margin_v:   Voltage added to each bound as a detection margin (default 0.05 V).
+
+        Returns:
+            Threshold dict (same structure written to JSON).
+
+        Raises:
+            RuntimeError: If the ADC sensor is not present.
+            ValueError:   If fewer than 1 event of either switch type was captured.
+        """
+        adc = self.vso.sensors.get("adc")
+        ankle_sensor = self.vso.sensors.get("ankle_encoder")
+
+        if adc is None:
+            raise RuntimeError("ADC sensor not found in VSO — cannot calibrate hall switches.")
+
+        dorsi_events = []    # list of {hall1, hall2, hall1_dot, hall2_dot, angle_dot}
+        plantar_events = []
+
+        dt = 1.0 / frequency
+        encoder_alpha = 0.15  # EMA smoothing factor (~5 Hz cutoff at 200 Hz)
+
+        # Window sizing: 0.4 s pre-keypress lookback, 0.2 s post-keypress lookahead
+        pre_samples  = int(0.4 * frequency)
+        post_samples = int(0.2 * frequency)
+
+        angle_filt = 0.0
+        angle_last = 0.0
+        hall1_last = 0.0
+        hall2_last = 0.0
+
+        rolling_buf = deque(maxlen=pre_samples)  # continuous pre-window
+        pending_key  = None   # 'd' or 'p' while collecting post-window
+        post_buf     = []
+        post_remain  = 0
+
+        print()
+        print("=" * 60)
+        print("  Hall Switch Calibration")
+        print("=" * 60)
+        print("  Walk the exoskeleton through dorsi/plantarflexion cycles.")
+        print("  Press a key near the time each mechanical switch fires —")
+        print("  the peak hall derivative in the surrounding window is used.")
+        print()
+        print("    d     = dorsiflexion switch")
+        print("    p     = plantarflexion switch")
+        print("    ENTER = done — compute and save thresholds")
+        print("=" * 60)
+        print()
+
+        def _read_sensors():
+            self.vso.update()
+            data = getattr(adc, "_data", [0.0, 0.0])
+            h1 = data[0] / 1000.0 if len(data) > 0 else 0.0
+            h2 = data[1] / 1000.0 if len(data) > 1 else 0.0
+            if ankle_sensor is not None:
+                ankle_sensor.update()
+                ang = self.side * np.rad2deg(ankle_sensor.position) - self.calib_offset
+            else:
+                ang = 0.0
+            return h1, h2, ang
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        t_loop_start = time.monotonic()
+
+        try:
+            tty.setcbreak(fd)
+
+            while True:
+                t_iter = time.monotonic()
+
+                hall1, hall2, angle_raw = _read_sensors()
+                angle_filt = encoder_alpha * angle_raw + (1 - encoder_alpha) * angle_filt
+                hall1_dot = hall1 - hall1_last
+                hall2_dot = hall2 - hall2_last
+                angle_dot = angle_filt - angle_last
+                angle = angle_filt
+
+                sample = {
+                    "hall1": hall1,         "hall2": hall2,
+                    "hall1_dot": hall1_dot, "hall2_dot": hall2_dot,
+                    "angle": angle,         "angle_dot": angle_dot,
+                }
+
+                # --- Post-window collection ---
+                if post_remain > 0:
+                    post_buf.append(sample)
+                    post_remain -= 1
+
+                    if post_remain == 0:
+                        # Find the sample in the combined window with the largest
+                        # total hall derivative — that is when the switch actually fired.
+                        window = list(rolling_buf) + post_buf
+                        peak = max(
+                            window,
+                            key=lambda s: abs(s["hall1_dot"]) + abs(s["hall2_dot"]),
+                        )
+                        if pending_key == 'd':
+                            dorsi_events.append(peak)
+                            label = f"DORSI  #{len(dorsi_events):02d}"
+                        else:
+                            plantar_events.append(peak)
+                            label = f"PLANTAR #{len(plantar_events):02d}"
+                        print(
+                            f"\n  [{label}]"
+                            f"  hall1={peak['hall1']:+.4f} V  hall2={peak['hall2']:+.4f} V"
+                            f"  d(h1)={peak['hall1_dot']:+.5f}  d(h2)={peak['hall2_dot']:+.5f}"
+                            f"  d(ang)={peak['angle_dot']:+.4f}"
+                        )
+                        pending_key = None
+                        post_buf = []
+
+                # Always push to rolling buffer (used as pre-window for future keypresses)
+                rolling_buf.append(sample)
+
+                # --- Keypress check ---
+                if select.select([sys.stdin], [], [], 0)[0]:
+                    key = sys.stdin.read(1)
+
+                    if key in ('\n', '\r'):
+                        if post_remain > 0:
+                            print("\n  (Discarding incomplete window — press ENTER again to finish.)")
+                        else:
+                            print("\n\nFinishing calibration...")
+                            break
+
+                    elif key.lower() in ('d', 'p') and pending_key is None:
+                        pending_key = key.lower()
+                        post_remain = post_samples
+                        post_buf = []
+
+                else:
+                    elapsed = time.monotonic() - t_loop_start
+                    status = f"collecting +{post_samples - post_remain}/{post_samples}" if post_remain > 0 else f"dorsi={len(dorsi_events)} plantar={len(plantar_events)}"
+                    print(
+                        f"\r  t={elapsed:6.1f}s"
+                        f"  angle={angle:+7.2f}°"
+                        f"  h1={hall1:+.4f} V  h2={hall2:+.4f} V"
+                        f"  d(h1)={hall1_dot:+.5f}"
+                        f"  [{status}]   ",
+                        end="",
+                        flush=True,
+                    )
+
+                angle_last = angle_filt
+                hall1_last = hall1
+                hall2_last = hall2
+
+                remaining = dt - (time.monotonic() - t_iter)
+                if remaining > 0:
+                    time.sleep(remaining)
+
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        if not dorsi_events or not plantar_events:
+            raise ValueError(
+                f"Insufficient calibration data — dorsi={len(dorsi_events)} events, "
+                f"plantar={len(plantar_events)} events. Need at least 1 of each."
+            )
+
+        def _bounds_v(values):
+            return min(values) - margin_v, max(values) + margin_v
+
+        def _bounds_deg(values):
+            return min(values) - margin_deg, max(values) + margin_deg
+
+        d_h1     = [e["hall1"]     for e in dorsi_events]
+        d_h2     = [e["hall2"]     for e in dorsi_events]
+        d_h1_dot = [e["hall1_dot"] for e in dorsi_events]
+        d_ang    = [e["angle"]     for e in dorsi_events]
+        d_ang_dot = [e["angle_dot"] for e in dorsi_events]
+
+        p_h1     = [e["hall1"]     for e in plantar_events]
+        p_h2     = [e["hall2"]     for e in plantar_events]
+        p_ang    = [e["angle"]     for e in plantar_events]
+        p_ang_dot = [e["angle_dot"] for e in plantar_events]
+
+        thresholds = {
+            "dorsiflexion": {
+                "hall1_lower": _bounds_v(d_h1)[0],
+                "hall1_upper": _bounds_v(d_h1)[1],
+                "hall2_lower": _bounds_v(d_h2)[0],
+                "hall2_upper": _bounds_v(d_h2)[1],
+                "hall1_dot_upper": max(abs(v) for v in d_h1_dot) + margin_v,
+                "angle_lower": _bounds_deg(d_ang)[0],
+                "angle_upper": _bounds_deg(d_ang)[1],
+                "angle_dot_sign": 1 if float(np.mean(d_ang_dot)) >= 0 else -1,
+                "n_events": len(dorsi_events),
+            },
+            "plantarflexion": {
+                "hall1_lower": _bounds_v(p_h1)[0],
+                "hall1_upper": _bounds_v(p_h1)[1],
+                "hall2_lower": _bounds_v(p_h2)[0],
+                "hall2_upper": _bounds_v(p_h2)[1],
+                "angle_lower": _bounds_deg(p_ang)[0],
+                "angle_upper": _bounds_deg(p_ang)[1],
+                "angle_dot_sign": 1 if float(np.mean(p_ang_dot)) >= 0 else -1,
+                "n_events": len(plantar_events),
+            },
+        }
+
+        with open(self.hall_threshold_path, "w") as f:
+            json.dump(thresholds, f, indent=2)
+
+        d = thresholds["dorsiflexion"]
+        p = thresholds["plantarflexion"]
+        print(f"\nThresholds saved to {self.hall_threshold_path}")
+        print(
+            f"  Dorsiflexion  ({d['n_events']} events): "
+            f"hall1=[{d['hall1_lower']:.4f}, {d['hall1_upper']:.4f}] V  "
+            f"hall2=[{d['hall2_lower']:.4f}, {d['hall2_upper']:.4f}] V  "
+            f"d(h1)_upper={d['hall1_dot_upper']:.4f}  "
+            f"angle=[{d['angle_lower']:.2f}, {d['angle_upper']:.2f}]°"
+        )
+        print(
+            f"  Plantarflexion ({p['n_events']} events): "
+            f"hall1=[{p['hall1_lower']:.4f}, {p['hall1_upper']:.4f}] V  "
+            f"hall2=[{p['hall2_lower']:.4f}, {p['hall2_upper']:.4f}] V  "
+            f"angle=[{p['angle_lower']:.2f}, {p['angle_upper']:.2f}]°"
+        )
+        LOGGER.info(f"Hall switch thresholds saved to {self.hall_threshold_path}")
+
+        return thresholds
+
+    def load_hall_thresholds(self) -> dict:
+        """
+        Load hall-effect switch thresholds from file.
+
+        Returns:
+            Threshold dict with 'dorsiflexion' and 'plantarflexion' keys.
+
+        Raises:
+            FileNotFoundError: If the threshold file does not exist.
+        """
+        if not self.hall_threshold_path.exists():
+            raise FileNotFoundError(
+                f"No hall threshold file found at {self.hall_threshold_path}. "
+                "Run calibrate_hall_switches() first."
+            )
+        with open(self.hall_threshold_path, "r") as f:
+            thresholds = json.load(f)
+        LOGGER.info(f"Loaded hall switch thresholds from {self.hall_threshold_path}")
+        return thresholds
+
 
 if __name__ == "__main__":
     pass

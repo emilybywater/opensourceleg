@@ -1,0 +1,23 @@
+{
+  "dorsiflexion": {
+    "hall1_lower": -1.2589996337890625,
+    "hall1_upper": -1.0267196655273436,
+    "hall2_lower": -1.5186752319335937,
+    "hall2_upper": -1.3502944946289062,
+    "hall1_dot_upper": 0.16636810302734378,
+    "angle_lower": 7.238993285992526,
+    "angle_upper": 15.178700330615905,
+    "angle_dot_sign": 1,
+    "n_events": 14
+  },
+  "plantarflexion": {
+    "hall1_lower": -1.0685104370117187,
+    "hall1_upper": -0.9065750122070312,
+    "hall2_lower": -1.3859420776367186,
+    "hall2_upper": -1.1535614013671873,
+    "angle_lower": -13.1791527179404,
+    "angle_upper": -3.0586083620009,
+    "angle_dot_sign": -1,
+    "n_events": 14
+  }
+}

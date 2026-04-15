@@ -7,23 +7,25 @@ Emily Bywater
 04/06/2025
 """
 
+import json
 import numpy as np
 from datetime import datetime
+from pathlib import Path
 import time
 from opensourceleg.robots.vso import VSO
 from opensourceleg.actuators.base import CONTROL_MODES
-from opensourceleg.actuators.brushed import MaxonActuator 
+from opensourceleg.actuators.brushed import MaxonActuator
 from opensourceleg.logging import LOGGER
 from opensourceleg.logging.logger import Logger
 from opensourceleg.sensors.base import SensorBase
 from opensourceleg.sensors.encoder import AS5048B
 from opensourceleg.sensors.encoderCounter import LS7366R
 from opensourceleg.sensors.imu import LordMicrostrainIMU
-from opensourceleg.sensors.hall import DRV5056 
+from opensourceleg.sensors.hall import DRV5056
 from opensourceleg.sensors.adc import ADS114S0x
 from opensourceleg.utilities.softrealtimeloop import SoftRealtimeLoop
 from opensourceleg.utilities import Profiler
-from VSOInitialization import VSOInitialization
+from VSOInitialization import VSOInitialization, DEFAULT_HALL_THRESHOLD_PATH
 import sliderPosition
 import csv
 import traceback
@@ -74,11 +76,14 @@ def controller_main():
 
     LOGGER.info("Started clock...")
 
-    init = VSOInitialization(vso=vso, side=side, homing_pwm = 0.45)
+    init = VSOInitialization(vso=vso, side=side, homing_pwm=0.45)
 
-    # track specific information using track function in datalog 
+    ENCODER_ALPHA = 0.15  # EMA smoothing factor (~5 Hz cutoff at 200 Hz)
+    angle_filt = 0.0
+
+    # track specific information using track function in datalog
     datalog.track_function(elapsed_time, name="time")
-    datalog.track_function(lambda: side * np.rad2deg(vso.sensors["ankle_encoder"].position) - init.calib_offset, name="ankleEncoderPos")
+    datalog.track_function(lambda: angle_filt, name="ankleEncoderPos")
     datalog.track_function(
         lambda: (getattr(vso.sensors.get("adc", []), "_data", [0, 0])[0] / 1000),
         name="hallEffect_1"
@@ -94,30 +99,51 @@ def controller_main():
         
         LOGGER.info("Starting VSO initialization sequence...")
         init.run(run_calibration=False)  # if not disassembled !
+        init.calibrate_hall_switches()
 
-        input('\nPress any key to begin walking:') 
-        vso.update() # call an update of the robot
-        loop = SoftRealtimeLoop(dt = 1/FREQUENCY) # soft real time loop set up! 
-        
+        # Load hall switch thresholds from calibration file
+        thresholds = init.load_hall_thresholds()
+        d_thresh = thresholds["dorsiflexion"]
+        p_thresh = thresholds["plantarflexion"]
+
+        input('\nPress any key to begin walking:')
+        vso.update()  # call an update of the robot
+        loop = SoftRealtimeLoop(dt=1 / FREQUENCY)  # soft real time loop set up!
+
         angle_last = 0.0
         hall1_last = 0.0
         hall2_last = 0.0
         dorsi_switch = False
         plantar_switch = False
         for t in loop:
-            # profiler.tic() # start the profiler timing 
+            # profiler.tic() # start the profiler timing
             vso.update()
 
-            angle = side * np.rad2deg(vso.sensors["ankle_encoder"].position) - init.calib_offset
+            angle_raw = side * np.rad2deg(vso.sensors["ankle_encoder"].position) - init.calib_offset
+            angle_filt = ENCODER_ALPHA * angle_raw + (1 - ENCODER_ALPHA) * angle_filt
+            angle = angle_filt
             hall1 = getattr(vso.sensors.get("adc", []), "_data", [0, 0])[0] / 1000
             hall2 = getattr(vso.sensors.get("adc", []), "_data", [0, 0])[1] / 1000
-            if angle > angle_last and -1.45 <= hall2 <= -1.25 and hall1 < -1.07 and \
-                (hall1 - hall1_last) < 0.1 and dorsi_switch is False:
+            angle_dot = angle - angle_last
+            hall1_dot = hall1 - hall1_last
+
+            dorsi_angle_ok  = d_thresh["angle_dot_sign"] * angle_dot > 0
+            plantar_angle_ok = p_thresh["angle_dot_sign"] * angle_dot > 0
+
+            if (dorsi_angle_ok
+                    and d_thresh["hall1_lower"] <= hall1 <= d_thresh["hall1_upper"]
+                    and d_thresh["hall2_lower"] <= hall2 <= d_thresh["hall2_upper"]
+                    and abs(hall1_dot) <= d_thresh["hall1_dot_upper"]
+                    and d_thresh["angle_lower"] <= angle <= d_thresh["angle_upper"]
+                    and not dorsi_switch):
                 print('Dorsiflexion switch detected!')
                 dorsi_switch = True
                 plantar_switch = False
-            elif angle < angle_last and -1.0 <= hall1 <= -0.9 and hall2 > -1.25 and \
-                plantar_switch is False:
+            elif (plantar_angle_ok
+                    and p_thresh["hall1_lower"] <= hall1 <= p_thresh["hall1_upper"]
+                    and p_thresh["hall2_lower"] <= hall2 <= p_thresh["hall2_upper"]
+                    and p_thresh["angle_lower"] <= angle <= p_thresh["angle_upper"]
+                    and not plantar_switch):
                 print('Plantarflexion switch detected!')
                 dorsi_switch = False
                 plantar_switch = True
