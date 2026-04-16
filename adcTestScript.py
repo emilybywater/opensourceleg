@@ -104,7 +104,7 @@ def controller_main():
         
         input('\nPress any key to begin initialization. Make sure you are on the blue cam!')
         LOGGER.info("Starting VSO initialization sequence...")
-        init.run(run_calibration=False, run_hall_calibration=True)
+        init.run(run_calibration=False, run_hall_calibration=False)
 
         # Load hall switch thresholds from calibration file
         thresholds = init.load_hall_thresholds()

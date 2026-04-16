@@ -354,6 +354,7 @@ class MaxonActuator(ActuatorBase):
         time_limit: [sec] maximum time for position control loop to execute (safety).
         After this time, the PWM will be set to zero, and the code assumes that the slider is jammed.
         """
+        LOGGER.info('Configuring position control.')
         self.scale_perc = scale_perc
         self.scale = scale
         self.min_error = min_pos_error

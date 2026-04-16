@@ -197,6 +197,67 @@ class VSOInitialization:
 
         LOGGER.info("VSO initialization complete.")
 
+    def run_manual_motor_calibration(self) -> float:
+        """
+        Manual stroke calibration — no motor movement.
+
+        Prompts the user to manually rotate the motor shaft to each end stop,
+        pressing Enter at each position. Uses encoder counts between the two
+        positions to compute scale_perc and saves it to the calibration file.
+
+        The encoder is zeroed at the 0% (soft stop) end stop so that subsequent
+        encoder reads directly map to position percentage.
+
+        Returns:
+            scale_perc: Encoder counts per 1% of full lead-screw travel.
+
+        Raises:
+            RuntimeError: If the motor encoder is not present in VSO sensors.
+        """
+        encoder_counter = self.vso.sensors.get("motor_encoder")
+        if encoder_counter is None:
+            raise RuntimeError("Motor encoder not found in VSO sensors.")
+
+        print()
+        print("=" * 60)
+        print("  Manual Motor Stroke Calibration")
+        print("=" * 60)
+        print("  Manually rotate the motor shaft to the 0% end stop (soft stop).")
+        input("  Press Enter when at the 0% end stop... ")
+
+        encoder_counter.clearCounter()
+        LOGGER.info("Encoder zeroed at 0% end stop.")
+        print("  Encoder zeroed.")
+
+        print()
+        print("  Manually rotate the motor shaft to the 100% end stop (hard stop).")
+        input("  Press Enter when at the 100% end stop... ")
+
+        encoder_counts = encoder_counter.readCounter()
+        scale_perc = abs(encoder_counts) / 100.0
+        LOGGER.info(
+            f"100% end stop recorded. Encoder counts: {encoder_counts}. "
+            f"scale_perc: {scale_perc:.2f}"
+        )
+
+        calibration = VSOCalibration(
+            vso=self.vso,
+            actuator=self.vso.actuators.get("ankle"),
+            encoder=encoder_counter,
+            calibration_path=self.calibration_path,
+        )
+        calibration.scale_perc = scale_perc
+
+        self.vso.actuators.get("ankle").position_control_init()
+        self.vso.actuators.get("ankle").position_control_config(scale_perc=scale_perc)
+        
+        calibration._save()
+
+        print(f"  Calibration complete. scale_perc = {scale_perc:.2f}")
+        print("=" * 60)
+        print()
+        return scale_perc
+
     def battery_postprocess(volts_at_adc: float, bat_div_gain: float) -> float:
         """Convert ADC-pin voltage to battery voltage (undo divider)."""
         return volts_at_adc * bat_div_gain
