@@ -218,28 +218,27 @@ class VSOInitialization:
         if encoder_counter is None:
             raise RuntimeError("Motor encoder not found in VSO sensors.")
 
-        # print()
-        # print("=" * 60)
-        # print("  Manual Motor Stroke Calibration")
-        # print("=" * 60)
-        # print("  Manually rotate the motor shaft to the 0% end stop (soft stop).")
-        # input("  Press Enter when at the 0% end stop... ")
+        print()
+        print("=" * 60)
+        print("  Manual Motor Stroke Calibration")
+        print("=" * 60)
+        print("  Manually rotate the motor shaft to the 0% end stop (soft stop).")
+        input("  Press Enter when at the 0% end stop... ")
 
         encoder_counter.clearCounter()
-        # LOGGER.info("Encoder zeroed at 0% end stop.")
-        # print("  Encoder zeroed.")
+        LOGGER.info("Encoder zeroed at 0% end stop.")
+        print("  Encoder zeroed.")
 
-        # print()
-        # print("  Manually rotate the motor shaft to the 100% end stop (hard stop).")
-        # input("  Press Enter when at the 100% end stop... ")
+        print()
+        print("  Manually rotate the motor shaft to the 100% end stop (hard stop).")
+        input("  Press Enter when at the 100% end stop... ")
 
-        # encoder_counts = encoder_counter.readCounter()
-        # scale_perc = abs(encoder_counts) / 100.0
-        # LOGGER.info(
-        #     f"100% end stop recorded. Encoder counts: {encoder_counts}. "
-        #     f"scale_perc: {scale_perc:.2f}"
-        # )
-        scale_perc = 1
+        encoder_counts = encoder_counter.readCounter()
+        scale_perc = abs(encoder_counts) / 100.0
+        LOGGER.info(
+            f"100% end stop recorded. Encoder counts: {encoder_counts}. "
+            f"scale_perc: {scale_perc:.2f}"
+        )
 
         calibration = VSOCalibration(
             vso=self.vso,
