@@ -37,11 +37,11 @@ subjIDCode = 'trial'
 FREQUENCY = 200 # in Hz
 OFFLINE = False 
 
-side = -1
+side = 1
 
 # set up logging configurables  
 logName = subjIDCode + '_' + timestamp + '_' + trialNumber
-loggingPath = '/home/ebywater/opensourceleg/Data/Trial'
+loggingPath = '/home/anushkar/opensourceleg/Data/Trial'
 
 
 def controller_main():
@@ -56,7 +56,7 @@ def controller_main():
         tag ="variableStiffessOrthosis",
         actuators={},
         sensors={
-                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=1, data_rate=2000, drdy=16, voltage_reference=1.65),
+                "adc": ADS114S0x(offline = OFFLINE, tag = "adc", spi_bus=0, spi_cs=1, data_rate=2000, drdy=16, voltage_reference=1.65),
                 "hallEffect_1" : DRV5056(offline = OFFLINE, tag="hall_effect_1", sensor_num="A1", t_a = 23, supply_voltage =3.3),
                 "hallEffect_2" : DRV5056(offline = OFFLINE, tag="hall_effect_2", sensor_num="A1", t_a = 23, supply_voltage =3.3),
                 "ankle_encoder": AS5048B(offline = OFFLINE, tag="joint_encoder_ankle", bus='/dev/i2c-3', A1_adr_pin=False,
@@ -147,7 +147,7 @@ def controller_main():
             if (dorsi_angle_ok
                     and not dorsi_switch
                     and angle > 9
-                    and np.abs(hall1_dot) + np.abs(hall2_dot)*10 > 0.4):
+                    and np.abs(hall1_dot) + np.abs(hall2_dot)*10 > 1.2):
                 print('\n  Dorsiflexion switch detected!')
                 dorsi_switch = True
                 plantar_switch = False
@@ -159,9 +159,9 @@ def controller_main():
             elif (plantar_angle_ok
                     and not plantar_switch
                     and angle < 0
-                    and hall1_dot < 0
-                    and (hall2_dot > 0 or hall2_dot_dot > 0)
-                    and np.abs(hall1_dot)*10 + np.abs(hall2_dot) > 0.2):
+                    and hall1_dot > 0
+                    and (hall2_dot > 0)
+                    and np.abs(hall1_dot) + np.abs(hall2_dot)*10 > 0.38):
                 print('\n  Plantarflexion switch detected!')
                 dorsi_switch = False
                 plantar_switch = True
